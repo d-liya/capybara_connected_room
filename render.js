@@ -1,115 +1,88 @@
-// render.js
 import { level } from "./levelData.js";
 import { images } from "./assets.js";
 import { debugState } from "./input.js";
 
-// The canvas is 1280x720; the source image may be larger (e.g. 2560x1381).
-// We compute a uniform scale + camera offset so gameplay coords (native
-// image space) map correctly to canvas pixels, and follow the player.
 export function makeCamera(canvas) {
   return {
-    x: 0, y: 0,
-    scale: canvas.width / level.background.width, // fit width; adjust as needed
-    canvas
+    x: 0,
+    y: 0,
+    scale: Math.min(
+      canvas.width / level.background.width,
+      canvas.height / level.background.height,
+    ),
+    canvas,
   };
 }
 
-export function updateCamera(camera, player) {
-  const viewW = camera.canvas.width / camera.scale;
-  const viewH = camera.canvas.height / camera.scale;
+export function updateCamera() {}
 
-  camera.x = player.x + player.w / 2 - viewW / 2;
-  camera.y = player.y + player.h / 2 - viewH / 2;
-
-  camera.x = Math.max(0, Math.min(camera.x, level.background.width - viewW));
-  camera.y = Math.max(0, Math.min(camera.y, level.background.height - viewH));
+function screen(camera, x, y) {
+  return { x: (x - camera.x) * camera.scale, y: (y - camera.y) * camera.scale };
 }
 
-function worldToScreen(camera, x, y) {
-  return {
-    sx: (x - camera.x) * camera.scale,
-    sy: (y - camera.y) * camera.scale
-  };
+function drawEntity(ctx, camera, entity, color, imageKey) {
+  const point = screen(camera, entity.x, entity.y);
+  const width = entity.w * camera.scale;
+  const height = entity.h * camera.scale;
+  const image = imageKey ? images[imageKey] : null;
+  if (image) {
+    ctx.save();
+    ctx.translate(point.x + width / 2, point.y);
+    ctx.scale(entity.facing ?? entity.direction ?? 1, 1);
+    ctx.drawImage(image, -width / 2, 0, width, height);
+    ctx.restore();
+    return;
+  }
+  ctx.fillStyle = color;
+  ctx.fillRect(point.x, point.y, width, height);
 }
 
 export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
   const canvas = ctx.canvas;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.fillStyle = "#17202a";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
 
-  // background
-  const bg = images.background;
-  if (bg) {
-    const { sx, sy } = worldToScreen(camera, 0, 0);
-    ctx.drawImage(
-      bg,
-      0, 0, level.background.width, level.background.height,
-      sx, sy, level.background.width * camera.scale, level.background.height * camera.scale
-    );
-  }
-
-  // collectibles
-  for (const c of collectibles) {
-    if (c.collected) continue;
-    const { sx, sy } = worldToScreen(camera, c.x, c.y);
-    ctx.save();
-    ctx.shadowColor = "rgba(255,240,180,0.9)";
-    ctx.shadowBlur = 20;
-    ctx.fillStyle = "rgba(255,240,180,0.15)";
-    ctx.fillRect(sx, sy, c.w * camera.scale, c.h * camera.scale);
-    ctx.restore();
-  }
-
-  // enemies
-  for (const e of enemies) {
-    const { sx, sy } = worldToScreen(camera, e.x, e.y);
-    e.anim.draw(ctx, sx, sy, e.w * camera.scale, e.h * camera.scale);
-  }
-
-  // player
-  {
-    const { sx, sy } = worldToScreen(camera, player.x, player.y);
-    if (player.invuln > 0 && Math.floor(player.invuln * 20) % 2 === 0) {
-      ctx.globalAlpha = 0.4;
+  if (images.background) {
+    ctx.drawImage(images.background, 0, 0, canvas.width, canvas.height);
+  } else {
+    ctx.fillStyle = "#34495e";
+    for (const platform of level.platforms) {
+      const point = screen(camera, platform.x, platform.y);
+      ctx.fillRect(point.x, point.y, platform.w * camera.scale, platform.h * camera.scale);
     }
-    player.anim.draw(ctx, sx, sy, player.w * camera.scale, player.h * camera.scale);
-    ctx.globalAlpha = 1;
   }
 
-  if (ui.nearDoorHint) {
-    ctx.save();
-    ctx.font = "20px Georgia, serif";
-    ctx.fillStyle = "#fff8e0";
+  for (const item of collectibles) {
+    if (!item.collected) drawEntity(ctx, camera, item, "#f4d03f", item.imageKey);
+  }
+  for (const enemy of enemies) {
+    drawEntity(ctx, camera, enemy, "#c0392b", enemy.imageKey);
+  }
+  drawEntity(ctx, camera, player, "#5dade2", level.player.imageKey);
+
+  if (ui.nearDoor) {
+    ctx.fillStyle = "white";
+    ctx.font = "18px sans-serif";
     ctx.textAlign = "center";
-    ctx.shadowColor = "rgba(0,0,0,0.8)";
-    ctx.shadowBlur = 4;
-    ctx.fillText("Enter \u2191", canvas.width / 2, canvas.height - 36);
-    ctx.restore();
+    ctx.fillText("Enter", canvas.width / 2, canvas.height - 28);
   }
-
-  if (debugState.showBBoxes) drawDebugOverlay(ctx, camera);
+  if (debugState.showBBoxes) drawDebug(ctx, camera);
 }
 
-function drawDebugOverlay(ctx, camera) {
-  ctx.save();
-  ctx.lineWidth = 2;
-  ctx.font = "12px monospace";
-
+function drawDebug(ctx, camera) {
   const groups = [
-    ["platforms", "lime"],
-    ["hazards", "red"],
-    ["doors", "cyan"],
-    ["collectibles", "gold"]
+    ["platforms", "lime"], ["walls", "orange"], ["hazards", "red"],
+    ["doors", "cyan"], ["collectibles", "gold"],
   ];
-
+  ctx.font = "12px monospace";
   for (const [key, color] of groups) {
     ctx.strokeStyle = color;
     ctx.fillStyle = color;
     for (const box of level[key]) {
-      const { sx, sy } = worldToScreen(camera, box.x, box.y);
-      const w = box.w * camera.scale, h = box.h * camera.scale;
-      ctx.strokeRect(sx, sy, w, h);
-      ctx.fillText(box.id, sx + 2, sy - 4);
+      const point = screen(camera, box.x, box.y);
+      ctx.strokeRect(point.x, point.y, box.w * camera.scale, box.h * camera.scale);
+      ctx.fillText(box.id, point.x, point.y - 3);
     }
   }
-  ctx.restore();
 }

@@ -1,39 +1,46 @@
-// input.js
-export const keys = {
-  left: false,
-  right: false,
-  jump: false,
-  cast: false
-};
+export const keys = { left: false, right: false, jump: false };
+const pressed = new Set();
 
-const map = {
+const held = {
   ArrowLeft: "left", KeyA: "left",
   ArrowRight: "right", KeyD: "right",
-  Space: "jump", ArrowUp: "jump", KeyW: "jump",
-  KeyX: "cast", KeyJ: "cast"
+  Space: "jump",
+};
+const actions = {
+  ArrowUp: "interact", KeyW: "interact", KeyE: "interact",
+  KeyR: "reset",
 };
 
-window.addEventListener("keydown", (e) => {
-  const k = map[e.code];
-  if (k) { keys[k] = true; e.preventDefault(); }
+window.addEventListener("keydown", (event) => {
+  const heldKey = held[event.code];
+  const action = actions[event.code];
+  if (heldKey) keys[heldKey] = true;
+  if (action && !event.repeat) pressed.add(action);
+  if (heldKey || action) event.preventDefault();
 });
 
-window.addEventListener("keyup", (e) => {
-  const k = map[e.code];
-  if (k) { keys[k] = false; e.preventDefault(); }
+window.addEventListener("keyup", (event) => {
+  const heldKey = held[event.code];
+  if (heldKey) keys[heldKey] = false;
 });
 
-// Debug overlay toggle (` key)
+export function takeAction(name) {
+  if (!pressed.has(name)) return false;
+  pressed.delete(name);
+  return true;
+}
+
 export const debugState = { showBBoxes: false };
-window.addEventListener("keydown", (e) => {
-  if (e.code === "Backquote") {
-    debugState.showBBoxes = !debugState.showBBoxes;
-    const cb = document.getElementById("dbgToggle");
-    if (cb) cb.checked = debugState.showBBoxes;
-  }
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "Backquote") return;
+  debugState.showBBoxes = !debugState.showBBoxes;
+  const toggle = document.getElementById("dbgToggle");
+  if (toggle) toggle.checked = debugState.showBBoxes;
 });
 
 document.addEventListener("DOMContentLoaded", () => {
-  const cb = document.getElementById("dbgToggle");
-  if (cb) cb.addEventListener("change", () => { debugState.showBBoxes = cb.checked; });
+  const toggle = document.getElementById("dbgToggle");
+  toggle?.addEventListener("change", () => {
+    debugState.showBBoxes = toggle.checked;
+  });
 });

@@ -17,7 +17,7 @@ html, body {
 canvas#game {
   display: block;
   background: #111;
-  image-rendering: pixelated;
+  image-rendering: auto;
 }
 
 #hud {

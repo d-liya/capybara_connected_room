@@ -1,92 +1,63 @@
-// main.js
 import { level } from "./levelData.js";
 import { loadAllAssets } from "./assets.js";
 import { buildEntities } from "./entities.js";
-import { makeCamera, updateCamera, render } from "./render.js";
 import { aabbOverlap } from "./physics.js";
-import { tryEnterDoor, tickDoorCooldown, getOverlappingDoor } from "./rooms.js";
+import { getOverlappingDoor, tickDoorCooldown, tryEnterDoor } from "./rooms.js";
+import { makeCamera, render, updateCamera } from "./render.js";
 
 const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const objectiveEl = document.getElementById("objective");
-const heartsEl = document.getElementById("hearts");
+const context = canvas.getContext("2d");
+const hearts = document.getElementById("hearts");
+const objective = document.getElementById("objective");
 
-let player, enemies, collectibles, camera;
+let player;
+let enemies;
+let collectibles;
+let camera;
 let lastTime = 0;
-let nearDoorHint = false;
-
-// ---- Extension hooks (wire gameplay / cutscenes / room swaps here) ----
-
-function onCollect(collectible, _player) {
-  // e.g. inventory push, quest flags, SFX
-  if (collectible.type === "starmap") {
-    objectiveEl.textContent = "Star Map recovered!";
-  } else {
-    objectiveEl.textContent = `Collected: ${collectible.id}`;
-  }
-}
-
-function onDoorEnter(fromDoor, toDoor, _player) {
-  // e.g. fade, swap room data, play door SFX
-  // Currently same-background teleport only.
-  void fromDoor;
-  void toDoor;
-}
-
-// ---- Game setup ----
 
 async function init() {
-  objectiveEl.textContent = "Loading assets...";
-
+  objective.textContent = "Loading…";
   await loadAllAssets((done, total) => {
-    objectiveEl.textContent = `Loading assets... (${done}/${total})`;
+    objective.textContent = `Loading… ${done}/${total}`;
   });
-
-  objectiveEl.textContent = level.objective;
-
-  const built = buildEntities();
-  player = built.player;
-  enemies = built.enemies;
-  collectibles = built.collectibles;
-
+  ({ player, enemies, collectibles } = buildEntities());
   camera = makeCamera(canvas);
-
+  objective.textContent = level.objective;
   requestAnimationFrame(loop);
 }
 
-function updateHUD() {
-  heartsEl.textContent = "\u2764\uFE0F".repeat(Math.max(player.hp, 0));
-}
+function updateGameplay(dt) {
+  tickDoorCooldown(dt);
+  player.update(dt);
+  enemies.forEach((enemy) => enemy.update(dt));
+  tryEnterDoor(player);
 
-function checkCollectibles() {
-  for (const c of collectibles) {
-    if (!c.collected && aabbOverlap(player, c)) {
-      c.collected = true;
-      onCollect(c, player);
-    }
+  for (const item of collectibles) {
+    if (!item.collected && aabbOverlap(player, item)) item.collected = true;
+  }
+  if (level.goal && aabbOverlap(player, level.goal)) {
+    objective.textContent = level.goal.completionText ?? "Complete";
   }
 }
 
-function loop(timestamp) {
-  const dt = Math.min((timestamp - lastTime) / 1000, 1 / 30) || 0;
-  lastTime = timestamp;
+function updateHud() {
+  hearts.textContent = "♥".repeat(Math.max(0, player.hp));
+}
 
-  tickDoorCooldown(dt);
-  player.update(dt);
-
-  const entered = tryEnterDoor(player);
-  if (entered) onDoorEnter(entered.from, entered.to, player);
-
-  nearDoorHint = !!getOverlappingDoor(player);
-
-  for (const e of enemies) e.update(dt);
-  checkCollectibles();
-
+function loop(time) {
+  const dt = Math.min((time - lastTime) / 1000, 1 / 30) || 0;
+  lastTime = time;
+  updateGameplay(dt);
   updateCamera(camera, player);
-  render(ctx, camera, player, enemies, collectibles, { nearDoorHint });
-  updateHUD();
-
+  render(context, camera, player, enemies, collectibles, {
+    nearDoor: !!getOverlappingDoor(player),
+  });
+  updateHud();
   requestAnimationFrame(loop);
 }
 
-init();
+init().catch((error) => {
+  objective.textContent = error.message;
+  console.error(error);
+});
