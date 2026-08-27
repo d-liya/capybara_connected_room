@@ -1,0 +1,55 @@
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  background: #000;
+  height: 100%;
+  overflow: hidden;
+  font-family: 'Georgia', serif;
+}
+
+#stage {
+  position: relative;
+  width: 1280px;
+  height: 720px;
+  margin: 0 auto;
+}
+
+canvas#game {
+  display: block;
+  background: #111;
+  image-rendering: pixelated;
+}
+
+#hud {
+  position: absolute;
+  top: 12px; left: 12px; right: 12px;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  pointer-events: none;
+  color: #fff8e0;
+  text-shadow: 0 2px 4px rgba(0,0,0,0.8);
+}
+
+#hearts {
+  font-size: 28px;
+  letter-spacing: 4px;
+}
+
+#objective {
+  font-size: 18px;
+  max-width: 60%;
+  text-align: right;
+}
+
+#debugPanel {
+  position: absolute;
+  bottom: 8px;
+  left: 8px;
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-family: monospace;
+}

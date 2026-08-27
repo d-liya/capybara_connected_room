@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Moonlit Platformer</title>
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+  <div id="stage">
+    <canvas id="game" width="1280" height="720"></canvas>
+    <div id="hud">
+      <div id="hearts"></div>
+      <div id="objective">Loading...</div>
+    </div>
+    <div id="debugPanel">
+      <label><input type="checkbox" id="dbgToggle"> Show bbox debug overlay (`)</label>
+    </div>
+  </div>
+
+  <script type="module" src="js/levelData.js"></script>
+  <script type="module" src="js/assets.js"></script>
+  <script type="module" src="js/input.js"></script>
+  <script type="module" src="js/physics.js"></script>
+  <script type="module" src="js/entities.js"></script>
+  <script type="module" src="js/render.js"></script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>
