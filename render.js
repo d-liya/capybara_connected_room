@@ -32,7 +32,7 @@ function worldToScreen(camera, x, y) {
   };
 }
 
-export function render(ctx, camera, player, enemies, collectibles) {
+export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
   const canvas = ctx.canvas;
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
@@ -73,6 +73,17 @@ export function render(ctx, camera, player, enemies, collectibles) {
     }
     player.anim.draw(ctx, sx, sy, player.w * camera.scale, player.h * camera.scale);
     ctx.globalAlpha = 1;
+  }
+
+  if (ui.nearDoorHint) {
+    ctx.save();
+    ctx.font = "20px Georgia, serif";
+    ctx.fillStyle = "#fff8e0";
+    ctx.textAlign = "center";
+    ctx.shadowColor = "rgba(0,0,0,0.8)";
+    ctx.shadowBlur = 4;
+    ctx.fillText("Enter \u2191", canvas.width / 2, canvas.height - 36);
+    ctx.restore();
   }
 
   if (debugState.showBBoxes) drawDebugOverlay(ctx, camera);

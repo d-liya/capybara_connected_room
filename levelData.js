@@ -35,14 +35,14 @@ export const level = {
     { id: "spikes4", x: 1990, y: 995, w: 165, h: 45, type: "spike" }
   ],
 
-  // Decorative/interactive doors (symbol matched doors, optional gameplay use)
+  // Paired doors: walking in + jump/up teleports to linksTo partner.
   doors: [
-    { id: "door5-left",  x: 195,  y: 175, w: 95, h: 135, symbol: "star" },
-    { id: "door5-right", x: 2255, y: 175, w: 95, h: 135, symbol: "star" },
-    { id: "door4-left",  x: 195,  y: 505, w: 95, h: 135, symbol: "moon" },
-    { id: "door4-right", x: 2255, y: 505, w: 95, h: 135, symbol: "moon" },
-    { id: "door3-left",  x: 195,  y: 835, w: 95, h: 135, symbol: "butterfly" },
-    { id: "door3-right", x: 2255, y: 835, w: 95, h: 135, symbol: "butterfly" }
+    { id: "door5-left",  x: 195,  y: 175, w: 95, h: 135, symbol: "star",      linksTo: "door5-right" },
+    { id: "door5-right", x: 2255, y: 175, w: 95, h: 135, symbol: "star",      linksTo: "door5-left" },
+    { id: "door4-left",  x: 195,  y: 505, w: 95, h: 135, symbol: "moon",      linksTo: "door4-right" },
+    { id: "door4-right", x: 2255, y: 505, w: 95, h: 135, symbol: "moon",      linksTo: "door4-left" },
+    { id: "door3-left",  x: 195,  y: 835, w: 95, h: 135, symbol: "butterfly", linksTo: "door3-right" },
+    { id: "door3-right", x: 2255, y: 835, w: 95, h: 135, symbol: "butterfly", linksTo: "door3-left" }
   ],
 
   // Items the player can pick up. type maps to a small icon/effect.
