@@ -1,26 +1,44 @@
 import { level } from "./levelData.js";
 
-export const images = {};
+export const images = Object.create(null);
 
-function loadImage(name, url) {
-  return new Promise((resolve, reject) => {
+function load(key, url) {
+  return new Promise((resolve) => {
+    if (!url) {
+      resolve(false);
+      return;
+    }
     const image = new Image();
     image.crossOrigin = "anonymous";
-    image.onload = () => { images[name] = image; resolve(image); };
-    image.onerror = () => reject(new Error(`Failed to load ${name}`));
+    image.onload = () => {
+      images[key] = image;
+      resolve(true);
+    };
+    image.onerror = () => resolve(false);
     image.src = url;
   });
 }
 
 export async function loadAllAssets(onProgress) {
-  const jobs = [
-    ...(level.background.url ? [["background", level.background.url]] : []),
-    ...Object.entries(level.assets),
-  ];
+  const jobs = [];
+  if (level.background?.url) jobs.push(["background", level.background.url]);
+  for (const asset of level.assets || []) {
+    if (asset.seedUrl) jobs.push([`${asset.id}:seed`, asset.seedUrl]);
+    for (const clip of asset.clips || []) {
+      if (clip.sheet) jobs.push([`${asset.id}:${clip.state}:sheet`, clip.sheet]);
+      clip.frames?.forEach((url, i) =>
+        jobs.push([`${asset.id}:${clip.state}:${i}`, url]),
+      );
+    }
+  }
   let done = 0;
-  await Promise.all(jobs.map(([name, url]) => loadImage(name, url).then(() => {
-    done += 1;
-    onProgress?.(done, jobs.length, name);
-  })));
+  await Promise.all(
+    jobs.map(([key, url]) =>
+      load(key, url).then((ok) => {
+        done++;
+        onProgress?.(done, jobs.length, key, ok);
+      }),
+    ),
+  );
   return images;
 }

@@ -2,67 +2,164 @@ import { level } from "./levelData.js";
 import { keys, takeAction } from "./input.js";
 import {
   MOVE_SPEED,
-  JUMP_VELOCITY,
-  applyGravity,
-  clampToWorld,
-  resolvePlatformLanding,
+  clamp,
+  clampToFloor,
+  configureBody,
+  placeOnFloor,
 } from "./physics.js";
 
+function floorIndex(floor) {
+  return level.floors.findIndex((item) => item.floor === floor);
+}
+
 export class Player {
-  constructor(spawn) {
-    this.spawn = { ...spawn };
-    this.w = level.player.width;
-    this.h = level.player.height;
-    this.hp = 3;
-    this.facing = 1;
-    this.reset();
+  constructor() {
+    const def = level.instances?.[0] ?? {
+      floor: 1,
+      x: level.floors[0].spawn.x,
+      w: level.player.width,
+      h: level.player.height,
+      facing: 1,
+      assetId: level.player.assetId,
+    };
+    Object.assign(this, {
+      ...def,
+      hp: 3,
+      maxHp: 3,
+      vx: 0,
+      currentFloor: def.floor ?? 1,
+      invulnerable: 0,
+      dead: false,
+      attackElapsed: 0,
+      strikePulse: false,
+      visualState: "idle",
+      animTime: 0,
+    });
+    configureBody(this);
+    placeOnFloor(this, this.currentFloor, this.x);
   }
-
-  reset() {
-    this.x = this.spawn.x - this.w / 2;
-    this.y = this.spawn.y - this.h;
-    this.prevY = this.y;
-    this.vx = 0;
-    this.vy = 0;
-    this.onGround = false;
+  setVisual(state) {
+    if (this.visualState !== state) {
+      this.visualState = state;
+      this.animTime = 0;
+    }
   }
-
-  update(dt) {
-    if (takeAction("reset")) this.reset();
+  place(floor, x) {
+    Object.assign(this, { vx: 0, dead: false });
+    placeOnFloor(this, floor, x);
+    this.setVisual("idle");
+  }
+  retry() {
+    const spawn = level.floors[floorIndex(this.currentFloor)].spawn;
+    this.hp = this.maxHp;
+    this.invulnerable = 0.7;
+    this.place(this.currentFloor, spawn.x);
+  }
+  interact() {
+    if (!this.dead && this.visualState !== "hurt") {
+      this.setVisual("interact");
+      this.actionTime = 0.38;
+    }
+  }
+  update(dt, locked = false) {
+    this.animTime += dt;
+    this.invulnerable = Math.max(0, this.invulnerable - dt);
+    this.strikePulse = false;
+    if (this.dead) {
+      this.actionTime -= dt;
+      return;
+    }
+    if (this.visualState === "hurt" || this.visualState === "interact") {
+      this.actionTime -= dt;
+      if (this.actionTime <= 0) this.setVisual("idle");
+      return;
+    }
+    if (this.visualState === "attack") {
+      const before = this.attackElapsed;
+      this.attackElapsed += dt;
+      if (before < 0.14 && this.attackElapsed >= 0.14) this.strikePulse = true;
+      if (this.attackElapsed >= 0.42) this.setVisual("idle");
+    } else if (takeAction("attack") && !locked) {
+      this.attackElapsed = 0;
+      this.setVisual("attack");
+    }
+    if (this.visualState === "attack") return;
     this.vx = 0;
-    if (keys.left) { this.vx = -MOVE_SPEED; this.facing = -1; }
-    if (keys.right) { this.vx = MOVE_SPEED; this.facing = 1; }
-    if (keys.jump && this.onGround) this.vy = JUMP_VELOCITY;
+    if (!locked) {
+      if (keys.left && !keys.right) {
+        this.vx = -MOVE_SPEED;
+        this.facing = -1;
+      }
+      if (keys.right && !keys.left) {
+        this.vx = MOVE_SPEED;
+        this.facing = 1;
+      }
+    }
     this.x += this.vx * dt;
-    applyGravity(this, dt);
-    this.onGround = false;
-    for (const platform of level.platforms) resolvePlatformLanding(this, platform);
-    clampToWorld(this, level.background.width, level.background.height);
+    clampToFloor(this);
+    if (this.visualState !== "attack")
+      this.setVisual(this.vx ? "walk" : "idle");
   }
 }
 
 export class Enemy {
-  constructor(definition) {
-    Object.assign(this, definition);
-    this.w ??= 56;
-    this.h ??= 72;
-    this.direction = this.direction ?? 1;
+  constructor(def) {
+    Object.assign(this, { ...def });
+    configureBody(this);
+    this.start = { x: this.x, facing: def.facing ?? 1 };
+    this.visualState = "idle";
+    this.animTime = 0;
+    this.facing = def.facing ?? 1;
+    this.dead = false;
+    snapHome(this);
   }
-
+  setVisual(state) {
+    if (this.visualState !== state) {
+      this.visualState = state;
+      this.animTime = 0;
+    }
+  }
+  reset() {
+    this.x = this.start.x;
+    this.facing = this.start.facing;
+    this.dead = false;
+    configureBody(this);
+    this.setVisual("idle");
+  }
   update(dt) {
-    if (this.patrolMin == null || this.patrolMax == null) return;
-    this.x += (this.speed ?? 80) * this.direction * dt;
-    if (this.x <= this.patrolMin || this.x + this.w >= this.patrolMax) {
-      this.direction *= -1;
-      this.x = Math.max(this.patrolMin, Math.min(this.x, this.patrolMax - this.w));
+    this.animTime += dt;
+    if (this.dead) return;
+    const zone = level.patrols?.[this.id];
+    if (!zone) {
+      this.setVisual("idle");
+      return;
+    }
+    const min = zone.x;
+    const max = zone.x + zone.w - this.w;
+    const pace = (this.speed ?? 80) * 0.38;
+    this.x = clamp(this.x + this.facing * pace * dt, min, max);
+    if (this.x === min || this.x === max) {
+      this.facing = this.x === min ? 1 : -1;
+      this.setVisual("idle");
+    } else {
+      this.setVisual("patrol");
     }
   }
 }
 
+function snapHome(enemy) {
+  if (enemy.floor) placeOnFloor(enemy, enemy.floor, enemy.x);
+}
+
 export function buildEntities() {
   return {
-    player: new Player(level.spawn),
-    enemies: level.enemies.map((enemy) => new Enemy(enemy)),
-    collectibles: level.collectibles.map((item) => ({ ...item, collected: false })),
+    player: new Player(),
+    enemies: (level.enemies || []).map((def) => new Enemy(def)),
+    collectibles: (level.collectibles || []).map((item) => ({
+      ...item,
+      collected: false,
+      collectAge: 0,
+      phase: Math.random() * 6.28,
+    })),
   };
 }

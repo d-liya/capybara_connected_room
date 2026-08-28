@@ -1,22 +1,45 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<title>Connected Room Platformer</title>
-<link rel="stylesheet" href="style.css">
-</head>
-<body>
-  <div id="stage">
-    <canvas id="game" width="1280" height="720"></canvas>
-    <div id="hud">
-      <div id="hearts"></div>
-      <div id="objective">Loading...</div>
-    </div>
-    <div id="debugPanel">
-      <label><input type="checkbox" id="dbgToggle"> Show bbox debug overlay (`)</label>
-    </div>
-  </div>
-
-  <script type="module" src="main.js"></script>
-</body>
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1,viewport-fit=cover"
+    />
+    <title>Connected Rooms</title>
+    <style>
+      html,
+      body {
+        background: #0c0c0c;
+      }
+      #stage {
+        visibility: hidden;
+      }
+      body.is-playing #stage {
+        visibility: visible;
+      }
+    </style>
+    <link rel="stylesheet" href="style.css" />
+  </head>
+  <body>
+    <main id="stage">
+      <canvas id="game" width="2000" height="1125" aria-label="Connected rooms game"></canvas>
+      <section id="hud">
+        <div class="hudCard">
+          <strong>CONNECTED ROOMS</strong>
+          <div id="hearts">♥♥♥</div>
+        </div>
+        <div id="objective">Loading…</div>
+      </section>
+      <div id="controls">
+        Move: A/D or ←/→ &nbsp; Action: Space/J/X &nbsp; Interact: E/W/↑ &nbsp;
+        Retry floor: R &nbsp; Audio: M
+      </div>
+      <div id="toast" aria-live="polite"></div>
+      <div id="debugPanel">
+        <label><input type="checkbox" id="dbgToggle" /> Show bbox debug (`)</label>
+      </div>
+    </main>
+    <script type="module" src="main.js"></script>
+  </body>
 </html>

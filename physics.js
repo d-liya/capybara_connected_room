@@ -1,47 +1,54 @@
-// physics.js
-export const GRAVITY = 2400;      // px/s^2, in native image-space units
-export const MOVE_SPEED = 420;
-export const JUMP_VELOCITY = -950;
-export const MAX_FALL_SPEED = 1800;
+import { assetById, floorById, level } from "./levelData.js";
+
+export const MOVE_SPEED = 150;
+
+export function configureBody(entity, assetId = entity.assetId) {
+  const asset = assetById.get(assetId);
+  if (!asset) return entity;
+  entity.w = asset.renderSize.width;
+  entity.h = asset.renderSize.height;
+  return snapToFloor(entity);
+}
+
+export function snapToFloor(entity) {
+  const floor = floorById.get(entity.currentFloor ?? entity.floor);
+  if (floor) entity.y = floor.groundY - entity.h;
+  return entity;
+}
+
+export function placeOnFloor(entity, floor, x) {
+  entity.currentFloor = floor;
+  entity.floor = floor;
+  entity.x = x;
+  return snapToFloor(entity);
+}
+
+export function feetPoint(entity) {
+  const floor = floorById.get(entity.currentFloor ?? entity.floor);
+  return {
+    x: entity.x + entity.w / 2,
+    y: floor?.groundY ?? entity.y + entity.h,
+  };
+}
 
 export function aabbOverlap(a, b) {
-  return a.x < b.x + b.w &&
-         a.x + a.w > b.x &&
-         a.y < b.y + b.h &&
-         a.y + a.h > b.y;
+  return (
+    a.x < b.x + b.w && a.x + a.w > b.x && a.y < b.y + b.h && a.y + a.h > b.y
+  );
 }
-
-// Resolve vertical landing on a platform: only counts if falling
-// onto it from above (prevents snapping to platforms from the side).
-export function resolvePlatformLanding(entity, platform) {
-  const wasAbove = (entity.prevY + entity.h) <= platform.y + 1;
-  const overlapsX = entity.x + entity.w > platform.x && entity.x < platform.x + platform.w;
-  const fallingIntoTop =
-    entity.y + entity.h >= platform.y &&
-    entity.y + entity.h <= platform.y + platform.h + 40 &&
-    entity.vy >= 0;
-
-  if (overlapsX && fallingIntoTop && wasAbove) {
-    entity.y = platform.y - entity.h;
-    entity.vy = 0;
-    entity.onGround = true;
-    return true;
-  }
-  return false;
+export function centerX(entity) {
+  return entity.x + entity.w / 2;
 }
-
-export function applyGravity(entity, dt) {
-  entity.prevY = entity.y;
-  entity.vy = Math.min(entity.vy + GRAVITY * dt, MAX_FALL_SPEED);
-  entity.y += entity.vy * dt;
+export function clamp(value, min, max) {
+  return Math.max(min, Math.min(max, value));
 }
-
-export function clampToWorld(entity, worldW, worldH) {
-  if (entity.x < 0) entity.x = 0;
-  if (entity.x + entity.w > worldW) entity.x = worldW - entity.w;
-  if (entity.y + entity.h > worldH) {
-    entity.y = worldH - entity.h;
-    entity.vy = 0;
-    entity.onGround = true;
-  }
+export function clampToFloor(entity) {
+  const { walkMin, walkMax } = level.bounds;
+  entity.x = clamp(entity.x, walkMin, walkMax - entity.w);
+  snapToFloor(entity);
+}
+export function attackBox(player) {
+  return player.facing > 0
+    ? { x: player.x + player.w - 8, y: player.y + 20, w: 76, h: player.h - 25 }
+    : { x: player.x - 68, y: player.y + 20, w: 76, h: player.h - 25 };
 }

@@ -1,33 +1,46 @@
-export const keys = { left: false, right: false, jump: false };
+export const keys = { left: false, right: false };
 const pressed = new Set();
-
 const held = {
-  ArrowLeft: "left", KeyA: "left",
-  ArrowRight: "right", KeyD: "right",
-  Space: "jump",
+  ArrowLeft: "left",
+  KeyA: "left",
+  ArrowRight: "right",
+  KeyD: "right",
 };
 const actions = {
-  ArrowUp: "interact", KeyW: "interact", KeyE: "interact",
+  Space: "attack",
+  KeyJ: "attack",
+  KeyX: "attack",
+  ArrowUp: "interact",
+  KeyW: "interact",
+  KeyE: "interact",
   KeyR: "reset",
 };
 
 window.addEventListener("keydown", (event) => {
-  const heldKey = held[event.code];
-  const action = actions[event.code];
-  if (heldKey) keys[heldKey] = true;
+  const hold = held[event.code],
+    action = actions[event.code];
+  if (hold) keys[hold] = true;
   if (action && !event.repeat) pressed.add(action);
-  if (heldKey || action) event.preventDefault();
+  if (hold || action) event.preventDefault();
 });
-
 window.addEventListener("keyup", (event) => {
-  const heldKey = held[event.code];
-  if (heldKey) keys[heldKey] = false;
+  if (held[event.code]) keys[held[event.code]] = false;
+});
+window.addEventListener("blur", () => {
+  keys.left = keys.right = false;
+  pressed.clear();
 });
 
+export function pressAction(name) {
+  pressed.add(name);
+}
 export function takeAction(name) {
   if (!pressed.has(name)) return false;
   pressed.delete(name);
   return true;
+}
+export function clearActions() {
+  pressed.clear();
 }
 
 export const debugState = { showBBoxes: false };
@@ -37,10 +50,11 @@ window.addEventListener("keydown", (event) => {
   const toggle = document.getElementById("dbgToggle");
   if (toggle) toggle.checked = debugState.showBBoxes;
 });
-
 document.addEventListener("DOMContentLoaded", () => {
-  const toggle = document.getElementById("dbgToggle");
-  toggle?.addEventListener("change", () => {
-    debugState.showBBoxes = toggle.checked;
-  });
+  document
+    .getElementById("dbgToggle")
+    ?.addEventListener(
+      "change",
+      (event) => (debugState.showBBoxes = event.target.checked),
+    );
 });
