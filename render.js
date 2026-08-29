@@ -482,7 +482,7 @@ function drawPrompt(ctx, camera, text) {
   ctx.restore();
 }
 
-export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
+export function render(ctx, camera, player, actors, collectibles, ui = {}) {
   const { canvas } = ctx;
   ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "low";
@@ -537,10 +537,10 @@ export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
       alpha: collecting ? 1 - age / 0.35 : 1,
     });
   }
-  for (const enemy of enemies) {
-    if (enemy.dead && enemy.animTime > 0.55) continue;
-    drawBody(ctx, camera, enemy, "#c0392b", enemy.visualState, enemy.animTime, {
-      alpha: enemy.dead ? Math.max(0, 1 - enemy.animTime / 0.55) : 1,
+  for (const actor of actors) {
+    if (actor.dead && actor.animTime > 0.55) continue;
+    drawBody(ctx, camera, actor, "#c0392b", actor.visualState, actor.animTime, {
+      alpha: actor.dead ? Math.max(0, 1 - actor.animTime / 0.55) : 1,
     });
   }
   if (
@@ -557,7 +557,7 @@ export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
     );
   drawPrompt(ctx, camera, ui.prompt);
   if (debugState.showBBoxes)
-    drawDebug(ctx, camera, player, enemies, collectibles);
+    drawDebug(ctx, camera, player, actors, collectibles);
 }
 function box(ctx, camera, item, color, label) {
   const p = point(camera, item.x, item.y);
@@ -566,13 +566,13 @@ function box(ctx, camera, item, color, label) {
   ctx.fillStyle = color;
   ctx.fillText(label || item.id, p.x, p.y - 2);
 }
-function drawDebug(ctx, camera, player, enemies, collectibles) {
+function drawDebug(ctx, camera, player, actors, collectibles) {
   ctx.save();
   ctx.font = `${uiPx(camera, 10)}px monospace`;
   level.platforms.forEach((item) => box(ctx, camera, item, "#52ff52"));
   level.doors.forEach((item) => box(ctx, camera, item, "#00eaff"));
   collectibles.forEach((item) => box(ctx, camera, item, "#ffd32a"));
-  enemies.forEach((item) => box(ctx, camera, item, "#ff543d"));
+  actors.forEach((item) => box(ctx, camera, item, "#ff543d"));
   box(ctx, camera, player, "#fff", "player");
   const hit = player.visualState === "attack" ? attackBox(player) : null;
   if (hit) box(ctx, camera, hit, "#ff8cff", "attack");

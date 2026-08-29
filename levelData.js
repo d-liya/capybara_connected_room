@@ -16,7 +16,13 @@ export const level = {
     sfx: [],
     dialogue: [],
   },
-  player: { width: 56, height: 96 },
+  controls: { primary: { label: "Action" } },
+  player: {
+    width: 56,
+    height: 96,
+    health: null,
+    primaryActionState: null,
+  },
   floors: [
     {
       floor: 1,
@@ -78,7 +84,10 @@ export const level = {
     },
   ],
   collectibles: [],
+  actors: [],
   enemies: [],
+  interactions: [],
+  initialState: {},
   patrols: {},
   goal: null,
   introShots: [

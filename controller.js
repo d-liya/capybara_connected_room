@@ -3,13 +3,14 @@ import { keys, pressAction } from "./input.js";
 const holds = new Map();
 let pad = null;
 let useButton = null;
+let primaryButton = null;
 let enabled = false;
 
 const ICON = {
   left: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10.2 5.1 3.3 12l6.9 6.9v-4.1h9.4V9.2h-9.4V5.1z" fill="currentColor"/></svg>`,
   right: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m13.8 5.1 6.9 6.9-6.9 6.9v-4.1H4.4V9.2h9.4V5.1z" fill="currentColor"/></svg>`,
   interact: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7.8 11V6.8a1.35 1.35 0 0 1 2.7 0V10h.65V4.9a1.35 1.35 0 0 1 2.7 0V10h.65V6a1.35 1.35 0 0 1 2.7 0v4.7h.65V8.2a1.35 1.35 0 0 1 2.7 0v5.3c0 4.5-2.7 7.2-7.2 7.2h-1.1c-2.2 0-3.7-.8-4.9-2.4l-3-4a1.55 1.55 0 0 1 2.4-1.95L7.8 13.5V11z" fill="currentColor"/></svg>`,
-  attack: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m19.7 2.8-6.1 1.5-7.9 9.2 2.4 2.4 9.2-7.9 1.5-6.1.9.9z" fill="currentColor"/><path d="m5.3 14.2 4.5 4.5-1.7 1.7-1.4-1.4-3 3-2-2 3-3-1.1-1.1 1.7-1.7z" fill="currentColor"/></svg>`,
+  primary: `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m12 2 2.1 6.2L20 10l-5.9 1.8L12 18l-2.1-6.2L4 10l5.9-1.8L12 2z" fill="currentColor"/><circle cx="18.5" cy="17.5" r="2.5" fill="currentColor"/></svg>`,
 };
 
 function preferTouch() {
@@ -137,12 +138,13 @@ function buildPad(root) {
     <button type="button" class="touchBtn touchDir touchMoveLeft" data-hold="left" aria-label="Walk left">${ICON.left}</button>
     <div class="touchActions">
       <button type="button" class="touchBtn touchUse" data-action="interact" aria-label="Interact">${ICON.interact}</button>
-      <button type="button" class="touchBtn touchStamp" data-action="attack" aria-label="Attack">${ICON.attack}</button>
+      <button type="button" class="touchBtn touchStamp" data-action="primary" aria-label="Action">${ICON.primary}</button>
     </div>
     <button type="button" class="touchBtn touchDir touchMoveRight" data-hold="right" aria-label="Walk right">${ICON.right}</button>
   `;
   root.appendChild(pad);
   useButton = pad.querySelector(".touchUse");
+  primaryButton = pad.querySelector(".touchStamp");
   const block = (event) => event.preventDefault();
   pad.addEventListener("contextmenu", block);
   pad.addEventListener("selectstart", block);
@@ -157,6 +159,12 @@ export function usingTouchControls() {
 
 export function setInteractReady(ready) {
   useButton?.classList.toggle("ready", !!ready);
+}
+
+export function setPrimaryActionPresentation({ label = "Action" } = {}) {
+  if (!primaryButton) return;
+  primaryButton.setAttribute("aria-label", label);
+  primaryButton.setAttribute("title", label);
 }
 
 export function mountTouchControls(root = document.getElementById("stage")) {

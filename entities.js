@@ -24,14 +24,14 @@ export class Player {
     };
     Object.assign(this, {
       ...def,
-      hp: 3,
-      maxHp: 3,
+      hp: level.player.health,
+      maxHp: level.player.health,
       vx: 0,
       currentFloor: def.floor ?? 1,
       invulnerable: 0,
       dead: false,
-      attackElapsed: 0,
-      strikePulse: false,
+      primaryElapsed: 0,
+      primaryPulse: false,
       visualState: "idle",
       animTime: 0,
     });
@@ -51,7 +51,7 @@ export class Player {
   }
   retry() {
     const spawn = level.floors[floorIndex(this.currentFloor)].spawn;
-    this.hp = this.maxHp;
+    if (this.maxHp != null) this.hp = this.maxHp;
     this.invulnerable = 0.7;
     this.place(this.currentFloor, spawn.x);
   }
@@ -64,7 +64,7 @@ export class Player {
   update(dt, locked = false) {
     this.animTime += dt;
     this.invulnerable = Math.max(0, this.invulnerable - dt);
-    this.strikePulse = false;
+    this.primaryPulse = false;
     if (this.dead) {
       this.actionTime -= dt;
       return;
@@ -74,14 +74,22 @@ export class Player {
       if (this.actionTime <= 0) this.setVisual("idle");
       return;
     }
-    if (this.visualState === "attack") {
-      const before = this.attackElapsed;
-      this.attackElapsed += dt;
-      if (before < 0.14 && this.attackElapsed >= 0.14) this.strikePulse = true;
-      if (this.attackElapsed >= 0.42) this.setVisual("idle");
-    } else if (takeAction("attack") && !locked) {
-      this.attackElapsed = 0;
-      this.setVisual("attack");
+    const primaryState = level.player.primaryActionState;
+    if (primaryState && this.visualState === primaryState) {
+      const before = this.primaryElapsed;
+      const pulseAt = level.player.primaryActionPulseSeconds ?? 0.14;
+      this.primaryElapsed += dt;
+      if (before < pulseAt && this.primaryElapsed >= pulseAt) {
+        this.primaryPulse = true;
+      }
+      if (
+        this.primaryElapsed >= (level.player.primaryActionDurationSeconds ?? 0.42)
+      ) {
+        this.setVisual("idle");
+      }
+    } else if (primaryState && takeAction("primary") && !locked) {
+      this.primaryElapsed = 0;
+      this.setVisual(primaryState);
     }
 
     this.vx = 0;
@@ -99,12 +107,12 @@ export class Player {
     this.x += this.vx * dt;
     clampToFloor(this);
     const moved = Math.abs(this.x - previousX) > 0.05;
-    if (this.visualState === "attack") return;
+    if (primaryState && this.visualState === primaryState) return;
     this.setVisual(moved ? "walk" : "idle");
   }
 }
 
-export class Enemy {
+export class Actor {
   constructor(def) {
     Object.assign(this, { ...def });
     configureBody(this);
@@ -169,14 +177,18 @@ export class Enemy {
   }
 }
 
-function snapHome(enemy) {
-  if (enemy.floor) placeOnFloor(enemy, enemy.floor, enemy.x);
+function snapHome(actor) {
+  if (actor.floor) placeOnFloor(actor, actor.floor, actor.x);
 }
 
 export function buildEntities() {
+  const actors = (level.actors || level.enemies || []).map(
+    (def) => new Actor(def),
+  );
   return {
     player: new Player(),
-    enemies: (level.enemies || []).map((def) => new Enemy(def)),
+    actors,
+    enemies: actors,
     collectibles: (level.collectibles || []).map((item) => ({
       ...item,
       collected: false,
@@ -185,3 +197,5 @@ export function buildEntities() {
     })),
   };
 }
+
+export const Enemy = Actor;

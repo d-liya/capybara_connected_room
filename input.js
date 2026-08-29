@@ -7,14 +7,18 @@ const held = {
   KeyD: "right",
 };
 const actions = {
-  Space: "attack",
-  KeyJ: "attack",
-  KeyX: "attack",
+  Space: "primary",
+  KeyJ: "primary",
+  KeyX: "primary",
   ArrowUp: "interact",
   KeyW: "interact",
   KeyE: "interact",
   KeyR: "reset",
 };
+
+function canonicalAction(name) {
+  return name === "attack" ? "primary" : name;
+}
 
 window.addEventListener("keydown", (event) => {
   const hold = held[event.code],
@@ -32,11 +36,12 @@ window.addEventListener("blur", () => {
 });
 
 export function pressAction(name) {
-  pressed.add(name);
+  pressed.add(canonicalAction(name));
 }
 export function takeAction(name) {
-  if (!pressed.has(name)) return false;
-  pressed.delete(name);
+  const action = canonicalAction(name);
+  if (!pressed.has(action)) return false;
+  pressed.delete(action);
   return true;
 }
 export function clearActions() {

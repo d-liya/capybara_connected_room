@@ -14,6 +14,7 @@ import {
 import {
   mountTouchControls,
   setInteractReady,
+  setPrimaryActionPresentation,
   usingTouchControls,
 } from "./controller.js";
 import {
@@ -26,6 +27,7 @@ import { createCoreLoadingGate } from "./loadingGate.js";
 import { createIntro } from "./intro.js";
 import { createCompletion } from "./completion.js";
 import { mountAudioHud } from "./audioHud.js";
+import { createMechanics } from "./mechanics.js";
 
 const canvas = document.getElementById("game"),
   ctx = canvas.getContext("2d", { alpha: false });
@@ -33,8 +35,9 @@ const hearts = document.getElementById("hearts"),
   objective = document.getElementById("objective");
 const toastElement = document.getElementById("toast");
 let player,
-  enemies,
+  actors,
   collectibles,
+  mechanics,
   camera,
   intro,
   completion,
@@ -58,19 +61,13 @@ function floorDef(floor = currentFloor) {
   return floorById.get(floor);
 }
 function floorReady(floor) {
-  const require = floorDef(floor)?.require;
-  if (!require) return true;
-  const enemiesMap = new Map(enemies.map((enemy) => [enemy.id, enemy]));
-  const items = new Map(collectibles.map((item) => [item.id, item]));
-  for (const id of require.defeat || []) {
-    if (!enemiesMap.get(id)?.dead) return false;
-  }
-  for (const id of require.collect || []) {
-    if (!items.get(id)?.collected) return false;
-  }
-  return true;
+  return mechanics.requirementsMet(floorDef(floor)?.require);
 }
 function retryFloor() {
+  mechanics.resetFloor(currentFloor);
+  actors.forEach((actor) => {
+    if (actor.floor === currentFloor) actor.reset();
+  });
   player.retry();
   clearActions();
   toast("Floor restarted.");
@@ -88,6 +85,35 @@ function collectItems() {
     toast("Picked up.");
   }
 }
+function interactionBody(interaction) {
+  if (
+    Number.isFinite(interaction.x) &&
+    Number.isFinite(interaction.y) &&
+    Number.isFinite(interaction.w) &&
+    Number.isFinite(interaction.h)
+  ) {
+    return interaction;
+  }
+  return (
+    level.instances?.find(
+      (item) =>
+        item.id === interaction.sourceId ||
+        item.canonicalId === interaction.sourceId,
+    ) || null
+  );
+}
+function availableInteraction() {
+  return (level.interactions || []).find((interaction) => {
+    if (
+      interaction.trigger !== "interact" ||
+      interaction.floor !== currentFloor
+    ) {
+      return false;
+    }
+    const body = interactionBody(interaction);
+    return body && aabbOverlap(player, body);
+  });
+}
 function handleInteraction() {
   if (!takeAction("interact") || player.dead) return;
   if (level.goal && currentFloor === level.goal.floor && aabbOverlap(player, level.goal)) {
@@ -97,6 +123,18 @@ function handleInteraction() {
     completion = createCompletion(camera, player, level.goal, {
       title: completionText,
     });
+    return;
+  }
+  const interaction = availableInteraction();
+  if (interaction) {
+    if (!mechanics.requirementsMet(interaction.conditions)) {
+      toast(interaction.blockedFeedback || "Something is still missing.");
+      return;
+    }
+    player.interact();
+    mechanics.applyEffects(interaction.effects);
+    mechanics.set(interaction.id, true);
+    toast(interaction.feedback?.[0] || "Done.");
     return;
   }
   const door = getOverlappingDoor(player, currentFloor);
@@ -133,6 +171,8 @@ function promptText() {
     aabbOverlap(player, level.goal)
   )
     return `${verb} — ${level.goal.prompt || "Use"}`;
+  const interaction = availableInteraction();
+  if (interaction) return `${verb} — ${interaction.prompt || "Use"}`;
   const door = getOverlappingDoor(player, currentFloor);
   if (door) return `${verb} — Use door`;
   const inspect = floorDef()?.inspect;
@@ -143,7 +183,7 @@ function promptText() {
 function updateIntro(dt) {
   time += dt;
   player.update(dt, true);
-  enemies.forEach((enemy) => enemy.update(dt, currentFloor));
+  actors.forEach((actor) => actor.update(dt, currentFloor));
   collectibles.forEach((item) => {
     if (item.collected) item.collectAge += dt;
   });
@@ -167,7 +207,7 @@ function update(dt) {
     return;
   }
   player.update(dt, false);
-  enemies.forEach((enemy) => enemy.update(dt, currentFloor));
+  actors.forEach((actor) => actor.update(dt, currentFloor));
   collectibles.forEach((item) => {
     if (item.collected) item.collectAge += dt;
   });
@@ -176,9 +216,13 @@ function update(dt) {
 }
 function updateHud() {
   if (hearts) {
-    const next =
-      "♥".repeat(Math.max(0, player.hp)) +
-      "♡".repeat(Math.max(0, player.maxHp - player.hp));
+    const hasHealth =
+      Number.isFinite(player.hp) && Number.isFinite(player.maxHp);
+    const next = hasHealth
+      ? "♥".repeat(Math.max(0, player.hp)) +
+        "♡".repeat(Math.max(0, player.maxHp - player.hp))
+      : "";
+    hearts.hidden = !hasHealth;
     if (next !== lastHearts) {
       hearts.textContent = next;
       lastHearts = next;
@@ -245,7 +289,7 @@ function loop(now) {
   if (intro?.playing) updateIntro(dt);
   else update(dt);
   if (!completion) updateCamera(camera, player, dt);
-  render(ctx, camera, player, enemies, collectibles, {
+  render(ctx, camera, player, actors, collectibles, {
     time,
     prompt: intro?.playing || completion ? "" : promptText(),
   });
@@ -276,7 +320,8 @@ async function init() {
   warmImageAnchors();
   await audioReady;
 
-  ({ player, enemies, collectibles } = buildEntities());
+  ({ player, actors, collectibles } = buildEntities());
+  mechanics = createMechanics(level, { actors, collectibles });
   currentFloor = player.currentFloor || 1;
   camera = makeCamera(canvas);
   syncCanvasSize(canvas);
@@ -288,6 +333,7 @@ async function init() {
   gate.teardown();
   document.body.classList.add("is-playing");
   mountTouchControls();
+  setPrimaryActionPresentation(level.controls?.primary);
   mountAudioHud();
   bindPagePause();
   if (level.introShots?.length) intro = createIntro(camera, player);
