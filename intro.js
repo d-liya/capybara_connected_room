@@ -106,7 +106,7 @@ function injectStyles() {
     #introOverlay {
       position: absolute;
       inset: 0;
-      z-index: 20;
+      z-index: 40;
       pointer-events: auto;
       cursor: pointer;
       user-select: none;
@@ -160,6 +160,8 @@ function injectStyles() {
       position: absolute;
       right: max(14px, var(--safe-right));
       top: max(14px, var(--safe-top));
+      z-index: 1;
+      appearance: none;
       border: 1px solid rgba(197, 173, 116, 0.65);
       background: rgba(8, 7, 5, 0.72);
       color: #ead7a8;
@@ -167,7 +169,8 @@ function injectStyles() {
       letter-spacing: 0.08em;
       text-transform: uppercase;
       padding: 7px 11px;
-      pointer-events: none;
+      pointer-events: auto;
+      cursor: pointer;
     }
     @media (max-width: 700px) {
       #introCaption { padding: 10px 12px 12px; }
@@ -179,6 +182,7 @@ function injectStyles() {
 }
 
 function mountOverlay(root) {
+  document.getElementById("introOverlay")?.remove();
   const overlay = document.createElement("div");
   overlay.id = "introOverlay";
   overlay.innerHTML = `
@@ -187,7 +191,7 @@ function mountOverlay(root) {
       <span class="title"></span>
       <span class="line"></span>
     </div>
-    <div id="introSkip">Skip</div>
+    <button type="button" id="introSkip">Skip</button>
   `;
   root.appendChild(overlay);
   return overlay;
@@ -280,8 +284,9 @@ export function createIntro(
     window.setTimeout(() => overlay.remove(), 480);
   }
 
-  function requestSkip() {
-    if (!playing || age < SKIP_GUARD_S || settling) return;
+  function requestSkip(force = false) {
+    if (!playing || settling) return;
+    if (!force && age < SKIP_GUARD_S) return;
     settling = true;
     settleTime = 0;
     settleFrom = currentLook();
@@ -294,6 +299,11 @@ export function createIntro(
   setCaption(startPose.caption, true);
   playShotDialogue(0);
 
+  overlay.querySelector("#introSkip").addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    requestSkip(true);
+  });
   overlay.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     requestSkip();

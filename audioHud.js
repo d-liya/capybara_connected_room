@@ -16,9 +16,10 @@ function injectStyles() {
     body.has-audio-hud #objective {
       margin-right: 46px;
     }
-    body.is-intro #audioHud {
-      opacity: 0;
-      pointer-events: none;
+    body.is-intro #audioHud,
+    body.is-intro #audioHud * {
+      opacity: 0 !important;
+      pointer-events: none !important;
     }
     #audioHud {
       position: absolute;
@@ -280,6 +281,7 @@ export function mountAudioHud(root = document.getElementById("stage")) {
   root.addEventListener(
     "pointerdown",
     (event) => {
+      if (document.body.classList.contains("is-intro")) return;
       if (!open || wrap.contains(event.target)) return;
       event.stopPropagation();
       setOpen(false);

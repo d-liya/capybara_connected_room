@@ -112,6 +112,10 @@ function injectLoadingStyles() {
       transition: opacity ${OVERLAY_FADE_MS}ms ease;
     }
 
+    .cpy-loading-overlay.is-leaving {
+      pointer-events: none;
+    }
+
     .cpy-loading-center {
       position: absolute;
       top: 50%;
@@ -580,6 +584,7 @@ export function createCoreLoadingGate(canvas, options = {}) {
   }
 
   if (canvas) canvas.style.visibility = "hidden";
+  document.querySelectorAll(".cpy-loading-overlay").forEach((el) => el.remove());
 
   const {
     overlay,
@@ -636,6 +641,10 @@ export function createCoreLoadingGate(canvas, options = {}) {
     };
 
     for (const target of [overlay, logo, continueBtn]) {
+      target.addEventListener("pointerdown", (event) => {
+        event.preventDefault();
+        onContinue();
+      });
       target.addEventListener("click", onContinue);
     }
     logo.addEventListener("keydown", onKeyDown);
@@ -696,6 +705,8 @@ export function createCoreLoadingGate(canvas, options = {}) {
     teardown: () => {
       resolveIfNeeded();
       if (canvas) canvas.style.visibility = "visible";
+      overlay.classList.add("is-leaving");
+      overlay.style.pointerEvents = "none";
       requestAnimationFrame(() => {
         overlay.style.opacity = "0";
       });

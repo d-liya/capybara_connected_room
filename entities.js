@@ -95,10 +95,12 @@ export class Player {
         this.facing = 1;
       }
     }
+    const previousX = this.x;
     this.x += this.vx * dt;
     clampToFloor(this);
+    const moved = Math.abs(this.x - previousX) > 0.05;
     if (this.visualState === "attack") return;
-    this.setVisual(this.vx ? "walk" : "idle");
+    this.setVisual(moved ? "walk" : "idle");
   }
 }
 
@@ -112,6 +114,7 @@ export class Enemy {
     this.facing = def.facing ?? 1;
     this.dead = false;
     snapHome(this);
+    this.clampToPatrol();
   }
   setVisual(state) {
     if (this.visualState !== state) {
@@ -124,11 +127,23 @@ export class Enemy {
     this.facing = this.start.facing;
     this.dead = false;
     configureBody(this);
+    this.clampToPatrol();
     this.setVisual("idle");
   }
-  update(dt) {
+  clampToPatrol() {
+    const zone = level.patrols?.[this.id];
+    if (!zone) return;
+    const min = zone.x;
+    const max = zone.x + zone.w - this.w;
+    if (max >= min) this.x = clamp(this.x, min, max);
+  }
+  update(dt, activeFloor) {
     this.animTime += dt;
     if (this.dead) return;
+    if (activeFloor != null && this.floor !== activeFloor) {
+      this.setVisual("idle");
+      return;
+    }
     const zone = level.patrols?.[this.id];
     if (!zone) {
       this.setVisual("idle");
@@ -136,13 +151,20 @@ export class Enemy {
     }
     const min = zone.x;
     const max = zone.x + zone.w - this.w;
+    if (max <= min) {
+      this.setVisual("idle");
+      return;
+    }
     const pace = (this.speed ?? 80) * 0.38;
+    const previousX = this.x;
     this.x = clamp(this.x + this.facing * pace * dt, min, max);
     if (this.x === min || this.x === max) {
       this.facing = this.x === min ? 1 : -1;
       this.setVisual("idle");
-    } else {
+    } else if (Math.abs(this.x - previousX) > 0.05) {
       this.setVisual("patrol");
+    } else {
+      this.setVisual("idle");
     }
   }
 }

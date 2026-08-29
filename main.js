@@ -24,6 +24,7 @@ import {
 } from "./audio.js";
 import { createCoreLoadingGate } from "./loadingGate.js";
 import { createIntro } from "./intro.js";
+import { createCompletion } from "./completion.js";
 import { mountAudioHud } from "./audioHud.js";
 
 const canvas = document.getElementById("game"),
@@ -36,6 +37,7 @@ let player,
   collectibles,
   camera,
   intro,
+  completion,
   lastTime = 0,
   paused = false,
   pauseOverlay = null,
@@ -90,7 +92,11 @@ function handleInteraction() {
   if (!takeAction("interact") || player.dead) return;
   if (level.goal && currentFloor === level.goal.floor && aabbOverlap(player, level.goal)) {
     player.interact();
-    toast(level.goal.completionText || "Complete.");
+    const completionText = level.goal.completionText || "Adventure complete!";
+    toast(completionText);
+    completion = createCompletion(camera, player, level.goal, {
+      title: completionText,
+    });
     return;
   }
   const door = getOverlappingDoor(player, currentFloor);
@@ -137,7 +143,7 @@ function promptText() {
 function updateIntro(dt) {
   time += dt;
   player.update(dt, true);
-  enemies.forEach((enemy) => enemy.update(dt));
+  enemies.forEach((enemy) => enemy.update(dt, currentFloor));
   collectibles.forEach((item) => {
     if (item.collected) item.collectAge += dt;
   });
@@ -145,6 +151,11 @@ function updateIntro(dt) {
   if (!intro.playing) intro = null;
 }
 function update(dt) {
+  if (completion) {
+    time += dt;
+    completion.update(dt);
+    return;
+  }
   time += dt;
   tickDoorCooldown(dt);
   if (toastTime > 0) {
@@ -156,7 +167,7 @@ function update(dt) {
     return;
   }
   player.update(dt, false);
-  enemies.forEach((enemy) => enemy.update(dt));
+  enemies.forEach((enemy) => enemy.update(dt, currentFloor));
   collectibles.forEach((item) => {
     if (item.collected) item.collectAge += dt;
   });
@@ -233,10 +244,10 @@ function loop(now) {
   lastTime = now;
   if (intro?.playing) updateIntro(dt);
   else update(dt);
-  updateCamera(camera, player, dt);
+  if (!completion) updateCamera(camera, player, dt);
   render(ctx, camera, player, enemies, collectibles, {
     time,
-    prompt: intro?.playing ? "" : promptText(),
+    prompt: intro?.playing || completion ? "" : promptText(),
   });
   if (!intro?.playing) updateHud();
   requestAnimationFrame(loop);
@@ -273,12 +284,11 @@ async function init() {
   if (typeof ResizeObserver === "function") {
     new ResizeObserver(() => syncCanvasSize(canvas)).observe(canvas);
   }
-  mountTouchControls();
-  mountAudioHud();
-
   await gate.waitForCompletion();
   gate.teardown();
   document.body.classList.add("is-playing");
+  mountTouchControls();
+  mountAudioHud();
   bindPagePause();
   if (level.introShots?.length) intro = createIntro(camera, player);
   requestAnimationFrame(loop);

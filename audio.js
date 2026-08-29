@@ -371,7 +371,7 @@ function playOneShot(channel, url, scale = 1, loop = false) {
   if (outputSuspended) return null;
   const gain = channelGain(channel) * clamp01(scale);
   if (!url || gain <= 0) return null;
-  unlockAudio();
+  if (contextNeedsResume()) resumeContext();
 
   const buffer = buffers.get(url);
   if (buffer) return startBuffer(buffer, gain, loop);

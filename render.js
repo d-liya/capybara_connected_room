@@ -268,7 +268,10 @@ export function updateCamera(camera, player, dt = 0) {
   const t = 1 - Math.exp(-18 * Math.max(dt, 0));
   camera.x += (target.x - camera.x) * t;
   camera.y += (target.y - camera.y) * t;
-  snapCameraToPixels(camera);
+  const settled =
+    Math.abs(target.x - camera.x) < 0.2 &&
+    Math.abs(target.y - camera.y) < 0.2;
+  if (settled) snapCameraToPixels(camera);
 }
 
 function snapCameraToPixels(camera) {
@@ -322,10 +325,12 @@ function idleSheetClip(asset) {
   );
 }
 function sheetHeightWorld(asset, clip) {
+  const idle = idleSheetClip(asset);
+  const scaleClip = idle || clip;
   return (
     (asset.renderSize.height / asset.videoBase.contentHeight) *
-    clip.frameHeight *
-    clip.scale
+    scaleClip.frameHeight *
+    scaleClip.scale
   );
 }
 const feetAnchors = new WeakMap();
@@ -386,15 +391,11 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
     image = images[`${asset.id}:${clip.state}:sheet`];
     const index = frameIndex(clip, time);
     source = [index * clip.frameWidth, 0, clip.frameWidth, clip.frameHeight];
-    heightPx = sh(
-      camera,
-      (asset.renderSize.height / asset.videoBase.contentHeight) *
-        clip.frameHeight *
-        clip.scale,
-    );
+    heightPx = sh(camera, sheetHeightWorld(asset, clip));
     widthPx = heightPx * (clip.frameWidth / clip.frameHeight);
-    anchorX = clip.anchor.x;
-    anchorY = clip.anchor.y;
+    const idle = idleSheetClip(asset);
+    anchorX = clip.anchor?.x ?? idle?.anchor?.x ?? 0.5;
+    anchorY = clip.anchor?.y ?? idle?.anchor?.y ?? 1;
   } else if (clip?.type === "frames") {
     const index = frameIndex(clip, time);
     image = images[`${asset.id}:${clip.state}:${index}`];
@@ -435,11 +436,13 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
       ? point(camera, entity.x + entity.w / 2, entity.y + entity.h / 2)
       : point(camera, feetPoint(entity).x, feetPoint(entity).y);
   const scale = options.scale || 1;
+  const drawScaleX = options.scaleX ?? scale;
+  const drawScaleY = options.scaleY ?? scale;
   ctx.save();
   ctx.globalAlpha = options.alpha ?? 1;
-  ctx.translate(Math.round(worldAnchor.x), Math.round(worldAnchor.y));
+  ctx.translate(worldAnchor.x, worldAnchor.y);
   ctx.rotate(options.rotation || 0);
-  ctx.scale(facing < 0 ? -scale : scale, scale);
+  ctx.scale(facing < 0 ? -drawScaleX : drawScaleX, drawScaleY);
   const dx = -anchorX * widthPx;
   const dy = -anchorY * heightPx;
   if (source)
@@ -524,11 +527,13 @@ export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
     if (item.collected && item.collectAge > 0.35) continue;
     const age = item.collectAge,
       collecting = item.collected;
+    const spin =
+      0.16 +
+      Math.abs(Math.cos((ui.time || 0) * 3.4 + (item.phase || 0))) * 0.84;
     drawBody(ctx, camera, item, "#f4d03f", "idle", ui.time, {
-      rotation: collecting
-        ? age * 5
-        : Math.sin((ui.time || 0) * 2 + (item.phase || 0)) * 0.08,
+      rotation: collecting ? age * 5 : 0,
       scale: collecting ? 1 + age * 1.5 : 1,
+      scaleX: collecting ? 1 + age * 1.5 : spin,
       alpha: collecting ? 1 - age / 0.35 : 1,
     });
   }

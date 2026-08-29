@@ -52,3 +52,20 @@ export function attackBox(player) {
     ? { x: player.x + player.w - 8, y: player.y + 20, w: 76, h: player.h - 25 }
     : { x: player.x - 68, y: player.y + 20, w: 76, h: player.h - 25 };
 }
+
+export function contactGap(a, b) {
+  if (a.x + a.w < b.x) return b.x - (a.x + a.w);
+  if (b.x + b.w < a.x) return a.x - (b.x + b.w);
+  return 0;
+}
+
+export function enemyStrikeBox(enemy) {
+  const reach = enemy.beam
+    ? enemy.reach
+    : Math.max(18, (enemy.reach || 40) * 0.22);
+  const y = enemy.y + 16;
+  const h = Math.max(24, enemy.h - 24);
+  return enemy.facing > 0
+    ? { x: enemy.x + enemy.w * 0.35, y, w: enemy.w * 0.65 + reach, h }
+    : { x: enemy.x - reach, y, w: enemy.w * 0.65 + reach, h };
+}
