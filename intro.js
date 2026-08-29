@@ -319,7 +319,7 @@ export function createIntro(
 
       if (
         takeAction("interact") ||
-        takeAction("attack") ||
+        takeAction("primary") ||
         takeAction("reset")
       ) {
         requestSkip();

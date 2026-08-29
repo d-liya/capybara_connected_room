@@ -87,9 +87,10 @@ export class Player {
       ) {
         this.setVisual("idle");
       }
-    } else if (primaryState && takeAction("primary") && !locked) {
+    } else if (takeAction("primary") && !locked) {
       this.primaryElapsed = 0;
-      this.setVisual(primaryState);
+      if (primaryState) this.setVisual(primaryState);
+      else this.primaryPulse = true;
     }
 
     this.vx = 0;

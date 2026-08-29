@@ -412,7 +412,11 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
     widthPx = frameSize
       ? (heightPx * frameSize.width) / frameSize.height
       : heightPx;
-    if (asset.kind === "player" || asset.kind === "enemy") {
+    if (
+      asset.kind === "player" ||
+      asset.kind === "enemy" ||
+      asset.kind === "npc"
+    ) {
       const feet = imageFeetAnchor(image);
       anchorX = feet.x;
       anchorY = feet.y;
