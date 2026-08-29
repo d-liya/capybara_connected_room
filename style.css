@@ -59,53 +59,45 @@ body.is-playing #stage {
   align-items: flex-start;
   gap: 8px;
   pointer-events: none;
-  text-shadow: 0 2px 3px #000;
 }
 .hudCard,
 #objective {
-  color: #ead7a8;
-  border: 2px solid #b9a273;
-  outline: 2px solid #17120b;
-  background: rgba(8, 7, 5, 0.86);
-  padding: 7px 11px;
-  box-shadow: 3px 3px 0 #090806;
+  color: #fff;
+  border: none;
+  outline: none;
+  background: none;
+  padding: 0;
+  box-shadow: none;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.75), 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 .hudCard strong {
-  font-size: 16px;
-  letter-spacing: 0.5px;
+  display: block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  opacity: 0.88;
 }
 .hudCard #hearts {
-  color: #d92734;
+  color: #ff3b4a;
   font-family: serif;
-  font-size: 24px;
-  line-height: 25px;
-  letter-spacing: 3px;
+  font-size: 26px;
+  line-height: 28px;
+  letter-spacing: 2px;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.55));
 }
 #objective {
   flex: 0 1 auto;
   width: fit-content;
   min-width: 0;
   max-width: min(18rem, calc(100% - 10.5rem));
-  font-weight: bold;
+  font-weight: 700;
   text-align: right;
-  font-size: 15px;
-  line-height: 1.25;
+  font-size: 14px;
+  line-height: 1.3;
 }
 #controls {
-  position: absolute;
-  left: 50%;
-  bottom: max(12px, var(--safe-bottom));
-  transform: translateX(-50%);
-  max-width: calc(100% - 24px);
-  white-space: nowrap;
-  padding: 7px 13px;
-  border: 1px solid #b9a273;
-  background: rgba(0, 0, 0, 0.72);
-  font:
-    12px Georgia,
-    serif;
-  animation: controls 8s forwards;
-  pointer-events: none;
+  display: none;
 }
 #toast {
   position: absolute;
@@ -142,39 +134,57 @@ body.is-playing #stage {
 }
 @media (max-width: 700px) {
   #objective {
-    font-size: 11px;
+    font-size: 12px;
     max-width: min(16rem, calc(100% - 8rem));
   }
   .hudCard strong {
-    font-size: 12px;
+    font-size: 10px;
   }
   .hudCard #hearts {
-    font-size: 19px;
+    font-size: 22px;
+    line-height: 24px;
   }
   #controls {
     font-size: 9px;
     white-space: normal;
     text-align: center;
   }
-  .hudCard,
-  #objective {
-    padding: 4px 7px;
-  }
+}
+
+#pauseOverlay {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  background: rgba(8, 6, 4, 0.52);
+  color: #f7ead0;
+  text-align: center;
+  pointer-events: none;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+#pauseOverlay[hidden] {
+  display: none;
+}
+#pauseOverlay strong {
+  font: 700 22px/1 Georgia, serif;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+#pauseOverlay span {
+  font: 500 13px/1.3 system-ui, sans-serif;
+  opacity: 0.82;
 }
 
 #touchPad {
   display: none;
   position: absolute;
+  inset: 0;
   z-index: 5;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px max(18px, var(--safe-right)) max(14px, var(--safe-bottom))
-    max(18px, var(--safe-left));
-  background: linear-gradient(transparent, rgba(8, 7, 5, 0.45));
+  background: transparent;
   pointer-events: none;
   touch-action: none;
   -webkit-user-select: none;
@@ -182,24 +192,21 @@ body.is-playing #stage {
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
 }
-body.touch-controls #touchPad {
-  display: flex;
+body.touch-controls #touchPad,
+body.touch-overlay #touchPad {
+  display: block;
 }
 body.touch-controls #controls,
+body.touch-overlay #controls,
 body.touch-controls #debugPanel {
   display: none;
 }
 body.touch-controls #toast {
-  bottom: calc(var(--touch-pad-height, 110px) + 10px);
-}
-.touchRight {
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  pointer-events: none;
+  bottom: calc(clamp(68px, 17vw, 92px) + 24px);
 }
 .touchBtn {
   pointer-events: auto;
+  isolation: isolate;
   appearance: none;
   -webkit-appearance: none;
   display: grid;
@@ -207,14 +214,25 @@ body.touch-controls #toast {
   gap: 2px;
   margin: 0;
   padding: 0;
-  border: 1.5px solid rgba(241, 223, 173, 0.35);
+  overflow: hidden;
+  border: 0;
   outline: none;
   border-radius: 50%;
-  background: rgba(12, 10, 8, 0.72);
-  color: #f3dfad;
-  box-shadow: none;
-  font: 600 9px/1 system-ui, sans-serif;
-  letter-spacing: 0.6px;
+  color: #fff;
+  background:
+    radial-gradient(circle at 50% 25%, rgba(255, 255, 255, 0.16), transparent 48%),
+    rgba(21, 13, 12, 0.58);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.13),
+    0 8px 24px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(16px) saturate(1.2);
+  -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  transform: translateZ(0) scale(1);
+  transition:
+    transform 0.22s cubic-bezier(0.22, 1.45, 0.36, 1),
+    box-shadow 0.22s ease,
+    border-color 0.22s ease,
+    filter 0.22s ease;
   touch-action: none;
   -webkit-touch-callout: none;
   -webkit-tap-highlight-color: transparent;
@@ -222,90 +240,117 @@ body.touch-controls #toast {
   user-select: none;
   cursor: pointer;
 }
+.touchBtn::before {
+  content: "";
+  position: absolute;
+  inset: 7% 17% auto;
+  height: 28%;
+  border-radius: 999px;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.28),
+    rgba(255, 255, 255, 0)
+  );
+  pointer-events: none;
+}
+.touchBtn::after {
+  content: "";
+  position: absolute;
+  inset: 18%;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    rgba(255, 255, 255, 0.45) 0%,
+    rgba(255, 255, 255, 0) 70%
+  );
+  transform: scale(0.2);
+  opacity: 0;
+  pointer-events: none;
+}
 .touchBtn:focus,
 .touchBtn:focus-visible,
 .touchBtn:active {
   outline: none;
-  background: rgba(12, 10, 8, 0.72);
 }
 .touchBtn svg {
   display: block;
-  width: 46%;
-  height: 46%;
+  width: 50%;
+  height: 50%;
   pointer-events: none;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.35));
 }
 .touchBtn span {
   display: none;
 }
 .touchDir {
-  width: clamp(64px, 12vw, 84px);
-  height: clamp(64px, 12vw, 84px);
+  width: clamp(60px, 13vw, 82px);
+  height: clamp(60px, 13vw, 82px);
 }
 .touchUse {
-  width: clamp(56px, 11vw, 74px);
-  height: clamp(56px, 11vw, 74px);
-  opacity: 0.7;
+  width: clamp(54px, 12vw, 74px);
+  height: clamp(54px, 12vw, 74px);
+  opacity: 0.78;
 }
 .touchUse.ready {
   opacity: 1;
-  border-color: rgba(241, 209, 139, 0.95);
-  box-shadow: 0 0 0 3px rgba(241, 209, 139, 0.18);
+  background: rgba(38, 26, 19, 0.68);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 6px 18px rgba(0, 0, 0, 0.22);
 }
 .touchStamp {
-  width: clamp(74px, 15vw, 98px);
-  height: clamp(74px, 15vw, 98px);
-  background: rgba(42, 18, 10, 0.8);
-  border-color: rgba(215, 179, 106, 0.7);
-}
-.touchStamp span,
-.touchUse span {
-  display: block;
-  pointer-events: none;
-  font-size: 8px;
-  letter-spacing: 0.8px;
+  width: clamp(64px, 14vw, 88px);
+  height: clamp(64px, 14vw, 88px);
 }
 .touchStamp svg,
 .touchUse svg {
-  width: 38%;
-  height: 38%;
+  width: 42%;
+  height: 42%;
 }
 .touchBtn.is-down {
-  transform: scale(0.94);
-  background: rgba(241, 223, 173, 0.18);
-  border-color: #f3dfad;
+  transform: translateZ(0) scale(0.88);
+  background: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    inset 0 6px 12px rgba(0, 0, 0, 0.16),
+    0 2px 8px rgba(0, 0, 0, 0.18);
+  transition-duration: 0.08s;
+}
+.touchBtn.is-down::after {
+  animation: glassPress 0.42s ease-out;
+}
+@keyframes glassPress {
+  0% {
+    transform: scale(0.2);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
 }
 .touchBtn::selection,
 .touchBtn *::selection {
   background: transparent;
   color: inherit;
 }
-@media (orientation: portrait) {
-  body.touch-controls #stage {
-    display: flex;
-    flex-direction: column;
-  }
-  body.touch-controls #game {
-    flex: 1 1 auto;
-    width: 100%;
-    height: auto;
-    min-height: 0;
-  }
-  body.touch-controls #touchPad {
-    position: relative;
-    flex: 0 0 auto;
-    background: rgba(8, 7, 5, 0.94);
-    border-top: 2px solid #b9a273;
-    padding-top: 14px;
-    padding-bottom: max(18px, var(--safe-bottom));
-  }
-  .touchDir,
-  .touchStamp,
-  .touchUse {
-    width: clamp(68px, 18vw, 96px);
-    height: clamp(68px, 18vw, 96px);
-  }
-  .touchStamp {
-    width: clamp(84px, 22vw, 112px);
-    height: clamp(84px, 22vw, 112px);
-  }
+#touchPad [data-hold="left"],
+#touchPad [data-hold="right"] {
+  position: absolute;
+  bottom: max(14px, var(--safe-bottom));
+}
+#touchPad [data-hold="left"] {
+  left: max(14px, var(--safe-left));
+}
+#touchPad [data-hold="right"] {
+  right: max(14px, var(--safe-right));
+}
+#touchPad .touchActions {
+  position: absolute;
+  left: 50%;
+  bottom: max(14px, var(--safe-bottom));
+  display: flex;
+  align-items: flex-end;
+  gap: clamp(10px, 2vw, 18px);
+  transform: translateX(-50%);
+  pointer-events: none;
 }

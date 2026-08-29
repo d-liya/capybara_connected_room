@@ -68,35 +68,103 @@ function chooseView(canvas) {
   };
 }
 
-function paddingWorld(camera) {
-  if (
-    layout.pad &&
-    layout.viewW === camera.viewW &&
-    layout.viewH === camera.viewH
-  ) {
-    return layout.pad;
-  }
-  const { viewW, viewH } = camera;
-  const cssW = layout.cssW;
-  const cssH = layout.cssH;
-  const hud = document.getElementById("hud");
-  const hudBottom = hud?.getBoundingClientRect().bottom ?? 88;
+function stageRect() {
+  return (
+    document.getElementById("game")?.getBoundingClientRect() || {
+      top: 0,
+      bottom: layout.cssH,
+      left: 0,
+      right: layout.cssW,
+      width: layout.cssW,
+      height: layout.cssH,
+    }
+  );
+}
+
+function overlappingChrome(el, stage, edge) {
+  if (!el) return 0;
+  const style = getComputedStyle(el);
+  if (style.display === "none" || style.visibility === "hidden") return 0;
+  if ((parseFloat(style.opacity) || 0) <= 0.08) return 0;
+  const box = el.getBoundingClientRect();
+  if (box.width < 2 || box.height < 2) return 0;
+  const top = Math.max(box.top, stage.top);
+  const bottom = Math.min(box.bottom, stage.bottom);
+  if (bottom - top < 2) return 0;
+  return edge === "top" ? bottom - stage.top : stage.bottom - top;
+}
+
+function overlayCss() {
+  const cssW = Math.max(1, layout.cssW);
+  const cssH = Math.max(1, layout.cssH);
+  const stage = stageRect();
   const styles = getComputedStyle(document.documentElement);
   const safeBottom = parseFloat(styles.getPropertyValue("--safe-bottom")) || 0;
   const overlay = document.body.classList.contains("touch-overlay");
-  const padH =
-    parseFloat(styles.getPropertyValue("--touch-pad-height")) || 0;
-  layout.overlay = overlay;
-  layout.padH = padH;
+  const padH = parseFloat(styles.getPropertyValue("--touch-pad-height")) || 0;
+  let topCss = overlappingChrome(document.getElementById("hud"), stage, "top");
+  if (topCss) topCss += 16;
+  else topCss = 64;
+  let bottomCss = 36 + safeBottom;
+  if (overlay) {
+    bottomCss = Math.max(bottomCss, Math.min(padH, cssH * 0.22) + 8);
+  } else {
+    const hit = overlappingChrome(
+      document.getElementById("controls"),
+      stage,
+      "bottom",
+    );
+    if (hit) bottomCss = Math.max(bottomCss, hit + 10);
+  }
+  const maxChrome = cssH * 0.42;
+  topCss = Math.min(topCss, maxChrome);
+  bottomCss = Math.min(bottomCss, maxChrome);
+  if (topCss + bottomCss > cssH * 0.68) {
+    const scale = (cssH * 0.68) / (topCss + bottomCss);
+    topCss *= scale;
+    bottomCss *= scale;
+  }
+  return {
+    cssW,
+    cssH,
+    topCss,
+    bottomCss,
+    xCss: Math.min(48, cssW * 0.08),
+    overlay,
+    padH,
+  };
+}
+
+function cameraConfig() {
+  const cam = level.camera || {};
+  const overlay = document.body.classList.contains("touch-overlay");
+  return {
+    focusPad: Number(cam.focusPad) > 0 ? Number(cam.focusPad) : 0.12,
+    maxZoom: Number(cam.maxZoom) > 0 ? Number(cam.maxZoom) : 1.6,
+    followZoom: Number(cam.followZoom) > 0 ? Number(cam.followZoom) : 1,
+    overlayZoom: Number(cam.overlayZoom) > 0 ? Number(cam.overlayZoom) : 1.35,
+    overlay,
+  };
+}
+
+function subjectHeight(player) {
+  return Math.max(
+    24,
+    Number(player?.h) || Number(level.player?.height) || 96,
+  );
+}
+
+function paddingWorld(camera) {
+  const { viewW, viewH } = camera;
+  const hud = overlayCss();
+  layout.overlay = hud.overlay;
+  layout.padH = hud.padH;
   layout.viewW = viewW;
   layout.viewH = viewH;
-  const topCss = hudBottom + 20;
-  const bottomCss = overlay ? padH + 10 : 56 + safeBottom;
-  const xCss = Math.min(48, cssW * 0.1);
   layout.pad = {
-    top: (topCss / cssH) * viewH,
-    bottom: (bottomCss / cssH) * viewH,
-    x: (xCss / cssW) * viewW,
+    top: (hud.topCss / hud.cssH) * viewH,
+    bottom: (hud.bottomCss / hud.cssH) * viewH,
+    x: (hud.xCss / hud.cssW) * viewW,
   };
   return layout.pad;
 }
@@ -104,29 +172,27 @@ function paddingWorld(camera) {
 function followTarget(camera, player) {
   const { viewW, viewH } = camera;
   const pad = paddingWorld(camera);
-  const px = player.x + player.w / 2;
-  const py = player.y + player.h / 2;
-
-  let targetX;
-  if (viewW >= WORLD_W) targetX = (WORLD_W - viewW) / 2;
-  else {
-    targetX = px - viewW / 2;
-    targetX = clamp(targetX, px - (viewW - pad.x), px - pad.x);
-    targetX = clamp(targetX, 0, WORLD_W - viewW);
-  }
-
-  let targetY;
-  if (viewH >= WORLD_H) targetY = (WORLD_H - viewH) / 2;
-  else {
-    targetY = py - viewH / 2;
-    targetY = clamp(
-      targetY,
-      py + player.h / 2 - (viewH - pad.bottom),
-      py - player.h / 2 - pad.top,
-    );
-    targetY = clamp(targetY, 0, WORLD_H - viewH);
-  }
-  return { x: targetX, y: targetY };
+  const cfg = cameraConfig();
+  const height = subjectHeight(player);
+  const width = Math.max(24, Number(player?.w) || Number(level.player?.width) || 56);
+  const px = player.x + width / 2;
+  const py = player.y + height / 2;
+  const clearH = Math.max(1, viewH - pad.top - pad.bottom);
+  const clearW = Math.max(1, viewW - pad.x * 2);
+  const innerY = Math.min(
+    clearH * 0.34,
+    Math.max(height * 0.55, clearH * cfg.focusPad),
+  );
+  const innerX = Math.min(
+    clearW * 0.34,
+    Math.max(width * 0.8, clearW * 0.08),
+  );
+  const midX = pad.x + innerX + (clearW - innerX * 2) / 2;
+  const midY = pad.top + innerY + (clearH - innerY * 2) / 2;
+  return {
+    x: clamp(px - midX, 0, Math.max(0, WORLD_W - viewW)),
+    y: clamp(py - midY, 0, Math.max(0, WORLD_H - viewH)),
+  };
 }
 
 function applyZoomView(camera, zoom, keepCenter) {
@@ -149,8 +215,10 @@ function clampCamera(camera) {
 }
 
 function followZoom() {
-  const zoom = Number(level.camera?.followZoom);
-  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+  const cfg = cameraConfig();
+  const base = cfg.followZoom || 1;
+  if (!cfg.overlay) return clamp(base, 1, cfg.maxZoom);
+  return clamp(Math.max(base, cfg.overlayZoom), 1, cfg.maxZoom);
 }
 
 export function lookAt(camera, x, y, zoom = 1) {
@@ -183,6 +251,7 @@ export function getFollowLook(camera, player) {
 }
 
 export function updateCamera(camera, player, dt = 0) {
+  syncCanvasSize(camera.canvas);
   if (camera.scripted) {
     applyZoomView(camera, camera.zoom || followZoom(), true);
     return;
@@ -393,23 +462,20 @@ function drawBody(ctx, camera, entity, color, state, time, options) {
 function drawPrompt(ctx, camera, text) {
   if (!text) return;
   ctx.save();
-  ctx.font = `bold ${uiPx(camera, 15)}px Georgia`;
+  ctx.font = `bold ${uiPx(camera, 15)}px system-ui, sans-serif`;
   ctx.textAlign = "center";
-  const pad = uiPx(camera, 24);
-  const w = ctx.measureText(text).width + pad;
-  const h = uiPx(camera, 28);
+  ctx.textBaseline = "middle";
   const overlay = layout.overlay;
   const padPx = overlay
     ? (layout.padH / Math.max(1, layout.cssH)) * ctx.canvas.height
     : 0;
-  const y = ctx.canvas.height - padPx - uiPx(camera, overlay ? 36 : 64);
-  ctx.fillStyle = "rgba(9,7,4,.82)";
-  ctx.fillRect((ctx.canvas.width - w) / 2, y, w, h);
-  ctx.strokeStyle = "#c5ad74";
-  ctx.lineWidth = uiPx(camera, 1);
-  ctx.strokeRect((ctx.canvas.width - w) / 2, y, w, h);
-  ctx.fillStyle = "#f3dfad";
-  ctx.fillText(text, ctx.canvas.width / 2, y + uiPx(camera, 19));
+  const y = ctx.canvas.height - padPx - uiPx(camera, overlay ? 28 : 52);
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "rgba(0,0,0,0.55)";
+  ctx.lineWidth = uiPx(camera, 4);
+  ctx.strokeText(text, ctx.canvas.width / 2, y);
+  ctx.fillStyle = "#fff";
+  ctx.fillText(text, ctx.canvas.width / 2, y);
   ctx.restore();
 }
 

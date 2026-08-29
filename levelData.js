@@ -10,7 +10,7 @@ export const level = {
     walkMax: 985,
     enterRightX: 850,
   },
-  camera: { followZoom: 1 },
+  camera: { followZoom: 1, overlayZoom: 1.35, maxZoom: 1.6 },
   audio: {
     music: "",
     sfx: [],

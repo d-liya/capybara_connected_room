@@ -1,7 +1,7 @@
 import { level, floorById } from "./levelData.js";
 import { loadAllAssets } from "./assets.js";
 import { buildEntities } from "./entities.js";
-import { takeAction, clearActions } from "./input.js";
+import { takeAction, clearActions, keys } from "./input.js";
 import { aabbOverlap } from "./physics.js";
 import { getOverlappingDoor, tickDoorCooldown, tryEnterDoor } from "./rooms.js";
 import {
@@ -18,6 +18,7 @@ import {
 } from "./controller.js";
 import {
   preloadAudio,
+  setAudioOutputSuspended,
   startBackgroundMusic,
   unlockAudio,
 } from "./audio.js";
@@ -36,6 +37,8 @@ let player,
   camera,
   intro,
   lastTime = 0,
+  paused = false,
+  pauseOverlay = null,
   time = 0,
   currentFloor = 1,
   toastTime = 0,
@@ -183,7 +186,48 @@ function updateHud() {
     lastInteractReady = ready;
   }
 }
+function ensurePauseOverlay() {
+  if (pauseOverlay) return pauseOverlay;
+  pauseOverlay = document.createElement("div");
+  pauseOverlay.id = "pauseOverlay";
+  pauseOverlay.hidden = true;
+  pauseOverlay.innerHTML =
+    "<strong>Paused</strong><span>Return to this page to keep playing</span>";
+  document.getElementById("stage")?.appendChild(pauseOverlay);
+  return pauseOverlay;
+}
+
+function setPaused(next) {
+  next = !!next;
+  if (paused === next) return;
+  paused = next;
+  document.body.classList.toggle("is-paused", paused);
+  keys.left = keys.right = false;
+  clearActions();
+  setAudioOutputSuspended(paused);
+  const overlay = ensurePauseOverlay();
+  overlay.hidden = !paused;
+  if (!paused) {
+    lastTime = 0;
+    unlockAudio();
+  }
+}
+
+function bindPagePause() {
+  const sync = () => setPaused(document.hidden);
+  document.addEventListener("visibilitychange", sync);
+  window.addEventListener("pagehide", () => setPaused(true));
+  window.addEventListener("pageshow", () => {
+    if (!document.hidden) setPaused(false);
+  });
+}
+
 function loop(now) {
+  if (paused) {
+    lastTime = now;
+    requestAnimationFrame(loop);
+    return;
+  }
   if (!lastTime) lastTime = now;
   const dt = Math.min((now - lastTime) / 1000, 1 / 30) || 0;
   lastTime = now;
@@ -235,6 +279,7 @@ async function init() {
   await gate.waitForCompletion();
   gate.teardown();
   document.body.classList.add("is-playing");
+  bindPagePause();
   if (level.introShots?.length) intro = createIntro(camera, player);
   requestAnimationFrame(loop);
 }

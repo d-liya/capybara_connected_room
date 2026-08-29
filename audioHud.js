@@ -44,11 +44,14 @@ function injectStyles() {
       padding: 0;
       display: grid;
       place-items: center;
-      color: #ead7a8;
-      background: rgba(8, 7, 5, 0.86);
-      border: 2px solid #b9a273;
-      outline: 2px solid #17120b;
-      box-shadow: 3px 3px 0 #090806;
+      color: #fff;
+      background: rgba(21, 13, 12, 0.58);
+      border: 0;
+      outline: none;
+      border-radius: 50%;
+      box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.13), 0 8px 24px rgba(0, 0, 0, 0.3);
+      backdrop-filter: blur(16px) saturate(1.2);
+      -webkit-backdrop-filter: blur(16px) saturate(1.2);
       cursor: pointer;
     }
     #audioHudToggle svg {
@@ -61,11 +64,14 @@ function injectStyles() {
     #audioHudPanel {
       width: min(230px, calc(100vw - 24px));
       padding: 10px 12px 12px;
-      color: #ead7a8;
-      background: rgba(8, 7, 5, 0.94);
-      border: 2px solid #b9a273;
-      outline: 2px solid #17120b;
-      box-shadow: 3px 3px 0 #090806;
+      color: #fff;
+      background: rgba(21, 13, 12, 0.78);
+      border: 0;
+      outline: none;
+      border-radius: 14px;
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.28);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
     }
     #audioHudPanel[hidden] {
       display: none;
@@ -76,7 +82,7 @@ function injectStyles() {
       font: 700 12px/1 Georgia, serif;
       letter-spacing: 0.16em;
       text-transform: uppercase;
-      color: #c5ad74;
+      color: #fff;
     }
     .audioHudRow + .audioHudRow {
       margin-top: 10px;
@@ -96,9 +102,10 @@ function injectStyles() {
       margin: 0;
       padding: 3px 8px;
       min-width: 42px;
-      border: 1px solid #b9a273;
-      background: transparent;
-      color: #ead7a8;
+      border: 0;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.12);
+      color: #fff;
       font: 700 10px/1 Georgia, serif;
       letter-spacing: 0.08em;
       text-transform: uppercase;
@@ -106,14 +113,46 @@ function injectStyles() {
     }
     .audioHudToggle.is-off {
       color: #8a7a55;
-      border-color: #6f6244;
+      background: rgba(0, 0, 0, 0.16);
     }
     .audioHudRow input[type="range"] {
+      appearance: none;
+      -webkit-appearance: none;
       display: block;
       width: 100%;
+      height: 24px;
       margin: 0;
-      accent-color: #c5ad74;
+      background: transparent;
+      touch-action: none;
       cursor: pointer;
+    }
+    .audioHudRow input[type="range"]::-webkit-slider-runnable-track {
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.28);
+    }
+    .audioHudRow input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      -webkit-appearance: none;
+      width: 20px;
+      height: 20px;
+      margin-top: -7.5px;
+      border: 0;
+      border-radius: 50%;
+      background: #fff;
+      box-shadow: 0 2px 7px rgba(0, 0, 0, 0.36);
+    }
+    .audioHudRow input[type="range"]::-moz-range-track {
+      height: 5px;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.28);
+    }
+    .audioHudRow input[type="range"]::-moz-range-thumb {
+      width: 18px;
+      height: 18px;
+      border: 0;
+      border-radius: 50%;
+      background: #fff;
     }
     .audioHudRow.is-off input[type="range"] {
       opacity: 0.45;
@@ -208,6 +247,35 @@ export function mountAudioHud(root = document.getElementById("stage")) {
       volume: Number(slider.value) / 100,
     });
   });
+
+  let activeSliderPointer = null;
+  const setSliderFromPointer = (slider, clientX) => {
+    const rect = slider.getBoundingClientRect();
+    const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+    slider.value = String(Math.round(ratio * 100));
+    setAudioChannel(slider.dataset.channel, { volume: ratio });
+  };
+  panel.addEventListener("pointerdown", (event) => {
+    const slider = event.target.closest("input[type=range]");
+    if (!slider) return;
+    event.preventDefault();
+    event.stopPropagation();
+    activeSliderPointer = event.pointerId;
+    slider.setPointerCapture?.(event.pointerId);
+    setSliderFromPointer(slider, event.clientX);
+  });
+  panel.addEventListener("pointermove", (event) => {
+    if (event.pointerId !== activeSliderPointer) return;
+    const slider = event.target.closest("input[type=range]");
+    if (!slider) return;
+    event.preventDefault();
+    setSliderFromPointer(slider, event.clientX);
+  });
+  const releaseSlider = (event) => {
+    if (event.pointerId === activeSliderPointer) activeSliderPointer = null;
+  };
+  panel.addEventListener("pointerup", releaseSlider);
+  panel.addEventListener("pointercancel", releaseSlider);
 
   root.addEventListener(
     "pointerdown",

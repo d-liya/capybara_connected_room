@@ -18,13 +18,18 @@ const decoding = new Map();
 const htmlCache = new Map();
 let settings = loadSettings();
 let music = null;
-let musicUrl = "";
+let musicUrl = "./temp.mp3";
 let musicWanted = false;
+let outputSuspended = false;
 let unlocked = false;
 let audioCtx = null;
 let masterGain = null;
+let musicSource = null;
+let musicGain = null;
 let unlockBound = false;
+let gestureResumeBound = false;
 let dialogueHandle = null;
+const liveHtml = new Set();
 
 function clamp01(value) {
   const n = Number(value);
@@ -73,7 +78,42 @@ function notify() {
 
 function tryPlay(element) {
   const play = element?.play?.();
-  if (play && typeof play.catch === "function") play.catch(() => {});
+  if (play && typeof play.catch === "function") {
+    play.catch(() => armGestureResume());
+  }
+}
+
+function contextNeedsResume(ctx = audioCtx) {
+  return ctx && (ctx.state === "suspended" || ctx.state === "interrupted");
+}
+
+function resumeContext() {
+  const ctx = getContext();
+  if (!contextNeedsResume(ctx)) return Promise.resolve();
+  return ctx.resume().catch(() => {});
+}
+
+function armGestureResume() {
+  if (gestureResumeBound || typeof window === "undefined") return;
+  gestureResumeBound = true;
+  const once = () => {
+    gestureResumeBound = false;
+    window.removeEventListener("pointerdown", once);
+    window.removeEventListener("keydown", once);
+    window.removeEventListener("touchstart", once);
+    if (outputSuspended) return;
+    unlockAudio();
+  };
+  window.addEventListener("pointerdown", once);
+  window.addEventListener("keydown", once);
+  window.addEventListener("touchstart", once, { passive: true });
+}
+
+export function unlockAudio() {
+  unlocked = true;
+  return resumeContext().finally(() => {
+    if (!outputSuspended && musicWanted) applyMusic();
+  });
 }
 
 function getContext() {
@@ -88,15 +128,6 @@ function getContext() {
   masterGain = audioCtx.createGain();
   masterGain.connect(audioCtx.destination);
   return audioCtx;
-}
-
-export function unlockAudio() {
-  const ctx = getContext();
-  const resume =
-    ctx?.state === "suspended" ? ctx.resume() : Promise.resolve();
-  unlocked = true;
-  if (musicWanted) applyMusic();
-  return resume;
 }
 
 function bindUnlock() {
@@ -175,6 +206,9 @@ function playHtml(url, gain, loop) {
   } catch {
     // Metadata may not be ready yet on the first play.
   }
+  liveHtml.add(element);
+  const drop = () => liveHtml.delete(element);
+  element.addEventListener("ended", drop, { once: true });
   tryPlay(element);
   return element;
 }
@@ -226,6 +260,7 @@ function ensureMusic() {
     music = new Audio();
     music.loop = true;
     music.preload = "auto";
+    music.crossOrigin = "anonymous";
   }
   if (music.getAttribute("data-url") !== musicUrl) {
     music.src = musicUrl;
@@ -234,15 +269,68 @@ function ensureMusic() {
   return music;
 }
 
+function connectMusic(element) {
+  const ctx = getContext();
+  if (!ctx || musicSource) return !!musicSource;
+  try {
+    musicSource = ctx.createMediaElementSource(element);
+    musicGain = ctx.createGain();
+    musicSource.connect(musicGain);
+    musicGain.connect(masterGain || ctx.destination);
+    element.volume = 1;
+    return true;
+  } catch {
+    musicSource = null;
+    musicGain = null;
+    return false;
+  }
+}
+
 function applyMusic() {
   if (!music && !musicWanted) return;
   const el = ensureMusic();
-  el.volume = settings.music.volume;
-  if (!musicWanted || !settings.music.on || settings.music.volume <= 0) {
+  const routed = connectMusic(el);
+  if (routed) musicGain.gain.value = settings.music.volume;
+  else el.volume = settings.music.volume;
+  if (
+    outputSuspended ||
+    !musicWanted ||
+    !settings.music.on ||
+    settings.music.volume <= 0
+  ) {
     el.pause();
     return;
   }
   tryPlay(el);
+}
+
+export function setAudioOutputSuspended(suspended) {
+  const next = !!suspended;
+  if (outputSuspended === next) return;
+  outputSuspended = next;
+  if (outputSuspended) {
+    music?.pause();
+    for (const el of liveHtml) {
+      if (el.paused) continue;
+      el.dataset.pagePause = "1";
+      el.pause();
+    }
+    if (audioCtx && audioCtx.state === "running") {
+      audioCtx.suspend().catch(() => {});
+    }
+    armGestureResume();
+    return;
+  }
+  applyMusic();
+  resumeContext().finally(() => {
+    applyMusic();
+    for (const el of [...liveHtml]) {
+      if (el.dataset.pagePause !== "1") continue;
+      delete el.dataset.pagePause;
+      tryPlay(el);
+    }
+  });
+  armGestureResume();
 }
 
 export function channelGain(channel) {
@@ -280,6 +368,7 @@ export async function preloadAudio(urls = []) {
 }
 
 function playOneShot(channel, url, scale = 1, loop = false) {
+  if (outputSuspended) return null;
   const gain = channelGain(channel) * clamp01(scale);
   if (!url || gain <= 0) return null;
   unlockAudio();
