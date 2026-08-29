@@ -7,7 +7,18 @@ const WORLD_W = level.bounds.width;
 const WORLD_H = level.bounds.height;
 const DESIGN_W = level.bounds.width;
 const DESIGN_H = (level.bounds.width * 9) / 16;
-const RENDER_SCALE = 2;
+
+const layout = {
+  cssW: 1,
+  cssH: 1,
+  pad: null,
+  overlay: false,
+  padH: 0,
+};
+
+function pixelRatio() {
+  return Math.min(window.devicePixelRatio || 1, 2);
+}
 
 export function makeCamera(canvas) {
   return {
@@ -22,11 +33,26 @@ export function makeCamera(canvas) {
   };
 }
 
+export function invalidateLayout() {
+  layout.pad = null;
+}
+
 export function syncCanvasSize(canvas) {
   const width = Math.max(1, canvas.clientWidth);
   const height = Math.max(1, canvas.clientHeight);
-  const bufferW = Math.round(width * RENDER_SCALE);
-  const bufferH = Math.round(height * RENDER_SCALE);
+  const dpr = pixelRatio();
+  const bufferW = Math.round(width * dpr);
+  const bufferH = Math.round(height * dpr);
+  if (
+    layout.cssW !== width ||
+    layout.cssH !== height ||
+    canvas.width !== bufferW ||
+    canvas.height !== bufferH
+  ) {
+    layout.pad = null;
+  }
+  layout.cssW = width;
+  layout.cssH = height;
   if (canvas.width !== bufferW || canvas.height !== bufferH) {
     canvas.width = bufferW;
     canvas.height = bufferH;
@@ -34,8 +60,8 @@ export function syncCanvasSize(canvas) {
 }
 
 function chooseView(canvas) {
-  const cssW = Math.max(1, canvas.clientWidth);
-  const cssH = Math.max(1, canvas.clientHeight);
+  const cssW = layout.cssW || Math.max(1, canvas.clientWidth);
+  const cssH = layout.cssH || Math.max(1, canvas.clientHeight);
   return {
     viewW: Math.min(WORLD_W, cssW * (WORLD_W / DESIGN_W)),
     viewH: Math.min(WORLD_H, cssH * (WORLD_H / DESIGN_H)),
@@ -43,28 +69,36 @@ function chooseView(canvas) {
 }
 
 function paddingWorld(camera) {
-  const { canvas, viewW, viewH } = camera;
-  const cssW = Math.max(1, canvas.clientWidth);
-  const cssH = Math.max(1, canvas.clientHeight);
+  if (
+    layout.pad &&
+    layout.viewW === camera.viewW &&
+    layout.viewH === camera.viewH
+  ) {
+    return layout.pad;
+  }
+  const { viewW, viewH } = camera;
+  const cssW = layout.cssW;
+  const cssH = layout.cssH;
   const hud = document.getElementById("hud");
   const hudBottom = hud?.getBoundingClientRect().bottom ?? 88;
   const styles = getComputedStyle(document.documentElement);
   const safeBottom = parseFloat(styles.getPropertyValue("--safe-bottom")) || 0;
   const overlay = document.body.classList.contains("touch-overlay");
   const padH =
-    parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        "--touch-pad-height",
-      ),
-    ) || 0;
+    parseFloat(styles.getPropertyValue("--touch-pad-height")) || 0;
+  layout.overlay = overlay;
+  layout.padH = padH;
+  layout.viewW = viewW;
+  layout.viewH = viewH;
   const topCss = hudBottom + 20;
   const bottomCss = overlay ? padH + 10 : 56 + safeBottom;
   const xCss = Math.min(48, cssW * 0.1);
-  return {
+  layout.pad = {
     top: (topCss / cssH) * viewH,
     bottom: (bottomCss / cssH) * viewH,
     x: (xCss / cssW) * viewW,
   };
+  return layout.pad;
 }
 
 function followTarget(camera, player) {
@@ -114,6 +148,11 @@ function clampCamera(camera) {
   camera.y = clamp(camera.y, 0, Math.max(0, WORLD_H - camera.viewH));
 }
 
+function followZoom() {
+  const zoom = Number(level.camera?.followZoom);
+  return Number.isFinite(zoom) && zoom > 0 ? zoom : 1;
+}
+
 export function lookAt(camera, x, y, zoom = 1) {
   syncCanvasSize(camera.canvas);
   applyZoomView(camera, zoom, false);
@@ -125,40 +164,49 @@ export function lookAt(camera, x, y, zoom = 1) {
 
 export function getFollowLook(camera, player) {
   const view = chooseView(camera.canvas);
+  const zoom = followZoom();
   const probe = {
     canvas: camera.canvas,
     x: camera.x,
     y: camera.y,
-    viewW: view.viewW,
-    viewH: view.viewH,
-    zoom: 1,
+    viewW: view.viewW / zoom,
+    viewH: view.viewH / zoom,
+    zoom,
     ready: true,
   };
   const pose = followTarget(probe, player);
   return {
     x: pose.x + probe.viewW / 2,
     y: pose.y + probe.viewH / 2,
-    zoom: 1,
+    zoom,
   };
 }
 
 export function updateCamera(camera, player, dt = 0) {
-  syncCanvasSize(camera.canvas);
   if (camera.scripted) {
-    applyZoomView(camera, camera.zoom || 1, true);
+    applyZoomView(camera, camera.zoom || followZoom(), true);
     return;
   }
-  applyZoomView(camera, 1, false);
+  applyZoomView(camera, followZoom(), false);
   const target = followTarget(camera, player);
   if (!camera.ready) {
     camera.x = target.x;
     camera.y = target.y;
     camera.ready = true;
+    snapCameraToPixels(camera);
     return;
   }
-  const t = 1 - Math.exp(-10 * Math.max(dt, 0));
+  const t = 1 - Math.exp(-18 * Math.max(dt, 0));
   camera.x += (target.x - camera.x) * t;
   camera.y += (target.y - camera.y) * t;
+  snapCameraToPixels(camera);
+}
+
+function snapCameraToPixels(camera) {
+  const xs = scaleX(camera);
+  const ys = scaleY(camera);
+  if (xs) camera.x = Math.round(camera.x * xs) / xs;
+  if (ys) camera.y = Math.round(camera.y * ys) / ys;
 }
 
 function scaleX(camera) {
@@ -175,10 +223,14 @@ function point(camera, x, y) {
   return { x: sx(camera, x), y: sy(camera, y) };
 }
 function uiPx(camera, size) {
-  return size * (camera.canvas.width / Math.max(1, canvasClientWidth(camera)));
+  return size * (camera.canvas.width / Math.max(1, layout.cssW));
 }
-function canvasClientWidth(camera) {
-  return camera.canvas.clientWidth;
+
+function imgSize(image) {
+  return {
+    width: image.naturalWidth || image.width || 0,
+    height: image.naturalHeight || image.height || 0,
+  };
 }
 
 function clipFor(asset, state) {
@@ -207,34 +259,48 @@ function sheetHeightWorld(asset, clip) {
     clip.scale
   );
 }
+const feetAnchors = new WeakMap();
+
 function imageFeetAnchor(image) {
   if (!image) return { x: 0.5, y: 1 };
-  if (image._feetAnchor) return image._feetAnchor;
-  const width = image.naturalWidth,
-    height = image.naturalHeight;
+  const cached = feetAnchors.get(image);
+  if (cached) return cached;
+  const { width, height } = imgSize(image);
   if (!width || !height) return { x: 0.5, y: 1 };
+  const maxDim = 64;
+  const scale = Math.min(1, maxDim / Math.max(width, height));
+  const w = Math.max(1, Math.round(width * scale));
+  const h = Math.max(1, Math.round(height * scale));
   const canvas = document.createElement("canvas");
-  canvas.width = width;
-  canvas.height = height;
+  canvas.width = w;
+  canvas.height = h;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
-  ctx.drawImage(image, 0, 0);
-  const { data } = ctx.getImageData(0, 0, width, height);
-  for (let y = height - 1; y >= 0; y--) {
+  ctx.drawImage(image, 0, 0, w, h);
+  const { data } = ctx.getImageData(0, 0, w, h);
+  let anchor = { x: 0.5, y: 1 };
+  for (let y = h - 1; y >= 0; y--) {
     let sum = 0,
       count = 0;
-    for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > 24) {
+    for (let x = 0; x < w; x++) {
+      if (data[(y * w + x) * 4 + 3] > 24) {
         sum += x;
         count++;
       }
     }
     if (count) {
-      image._feetAnchor = { x: (sum / count + 0.5) / width, y: (y + 1) / height };
-      return image._feetAnchor;
+      anchor = { x: (sum / count + 0.5) / w, y: (y + 1) / h };
+      break;
     }
   }
-  image._feetAnchor = { x: 0.5, y: 1 };
-  return image._feetAnchor;
+  feetAnchors.set(image, anchor);
+  return anchor;
+}
+
+export function warmImageAnchors(imageMap = images) {
+  for (const [key, image] of Object.entries(imageMap)) {
+    if (key === "background" || key.endsWith(":sheet")) continue;
+    imageFeetAnchor(image);
+  }
 }
 function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
   const asset = assetById.get(entity.assetId);
@@ -272,8 +338,9 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
         asset.renderSize.height * clip.normalization.scaleMultiplier,
       );
     }
-    widthPx = image
-      ? (heightPx * image.naturalWidth) / image.naturalHeight
+    const frameSize = image ? imgSize(image) : null;
+    widthPx = frameSize
+      ? (heightPx * frameSize.width) / frameSize.height
       : heightPx;
     if (asset.kind === "player" || asset.kind === "enemy") {
       const feet = imageFeetAnchor(image);
@@ -286,8 +353,9 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
   } else {
     image = images[`${asset.id}:seed`];
     heightPx = sh(camera, asset.renderSize.height);
-    widthPx = image
-      ? (heightPx * image.naturalWidth) / image.naturalHeight
+    const seedSize = image ? imgSize(image) : null;
+    widthPx = seedSize
+      ? (heightPx * seedSize.width) / seedSize.height
       : sw(camera, asset.renderSize.width);
     anchorX = asset.pivot?.[0] ?? 0.5;
     anchorY = asset.pivot?.[1] ?? 1;
@@ -300,26 +368,14 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
   const scale = options.scale || 1;
   ctx.save();
   ctx.globalAlpha = options.alpha ?? 1;
-  ctx.translate(worldAnchor.x, worldAnchor.y);
+  ctx.translate(Math.round(worldAnchor.x), Math.round(worldAnchor.y));
   ctx.rotate(options.rotation || 0);
   ctx.scale(facing < 0 ? -scale : scale, scale);
+  const dx = -anchorX * widthPx;
+  const dy = -anchorY * heightPx;
   if (source)
-    ctx.drawImage(
-      image,
-      ...source,
-      -anchorX * widthPx,
-      -anchorY * heightPx,
-      widthPx,
-      heightPx,
-    );
-  else
-    ctx.drawImage(
-      image,
-      -anchorX * widthPx,
-      -anchorY * heightPx,
-      widthPx,
-      heightPx,
-    );
+    ctx.drawImage(image, ...source, dx, dy, widthPx, heightPx);
+  else ctx.drawImage(image, dx, dy, widthPx, heightPx);
   ctx.restore();
   return true;
 }
@@ -342,15 +398,9 @@ function drawPrompt(ctx, camera, text) {
   const pad = uiPx(camera, 24);
   const w = ctx.measureText(text).width + pad;
   const h = uiPx(camera, 28);
-  const overlay = document.body.classList.contains("touch-overlay");
-  const padCss =
-    parseFloat(
-      getComputedStyle(document.documentElement).getPropertyValue(
-        "--touch-pad-height",
-      ),
-    ) || 0;
+  const overlay = layout.overlay;
   const padPx = overlay
-    ? (padCss / Math.max(1, ctx.canvas.clientHeight)) * ctx.canvas.height
+    ? (layout.padH / Math.max(1, layout.cssH)) * ctx.canvas.height
     : 0;
   const y = ctx.canvas.height - padPx - uiPx(camera, overlay ? 36 : 64);
   ctx.fillStyle = "rgba(9,7,4,.82)";
@@ -365,17 +415,19 @@ function drawPrompt(ctx, camera, text) {
 
 export function render(ctx, camera, player, enemies, collectibles, ui = {}) {
   const { canvas } = ctx;
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "low";
   ctx.fillStyle = "#17120b";
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   if (images.background) {
     const img = images.background;
+    const size = imgSize(img);
     ctx.drawImage(
       img,
       0,
       0,
-      img.width,
-      img.height,
+      size.width,
+      size.height,
       sx(camera, 0),
       sy(camera, 0),
       sx(camera, WORLD_W) - sx(camera, 0),

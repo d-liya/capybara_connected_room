@@ -4,19 +4,29 @@ import { buildEntities } from "./entities.js";
 import { takeAction, clearActions } from "./input.js";
 import { aabbOverlap } from "./physics.js";
 import { getOverlappingDoor, tickDoorCooldown, tryEnterDoor } from "./rooms.js";
-import { makeCamera, render, syncCanvasSize, updateCamera } from "./render.js";
+import {
+  makeCamera,
+  render,
+  syncCanvasSize,
+  updateCamera,
+  warmImageAnchors,
+} from "./render.js";
 import {
   mountTouchControls,
   setInteractReady,
   usingTouchControls,
 } from "./controller.js";
-import { startBackgroundMusic } from "./audio.js";
+import {
+  preloadAudio,
+  startBackgroundMusic,
+  unlockAudio,
+} from "./audio.js";
 import { createCoreLoadingGate } from "./loadingGate.js";
 import { createIntro } from "./intro.js";
 import { mountAudioHud } from "./audioHud.js";
 
 const canvas = document.getElementById("game"),
-  ctx = canvas.getContext("2d");
+  ctx = canvas.getContext("2d", { alpha: false });
 const hearts = document.getElementById("hearts"),
   objective = document.getElementById("objective");
 const toastElement = document.getElementById("toast");
@@ -28,7 +38,10 @@ let player,
   lastTime = 0,
   time = 0,
   currentFloor = 1,
-  toastTime = 0;
+  toastTime = 0,
+  lastHearts = "",
+  lastObjective = "",
+  lastInteractReady = null;
 
 function toast(text, duration = 1.8) {
   if (!toastElement) return;
@@ -148,14 +161,30 @@ function update(dt) {
   handleInteraction();
 }
 function updateHud() {
-  if (hearts)
-    hearts.textContent =
+  if (hearts) {
+    const next =
       "♥".repeat(Math.max(0, player.hp)) +
-      "♡".repeat(Math.max(0, 3 - player.hp));
-  if (objective) objective.textContent = objectiveText();
-  setInteractReady(!!promptText());
+      "♡".repeat(Math.max(0, player.maxHp - player.hp));
+    if (next !== lastHearts) {
+      hearts.textContent = next;
+      lastHearts = next;
+    }
+  }
+  if (objective) {
+    const next = objectiveText();
+    if (next !== lastObjective) {
+      objective.textContent = next;
+      lastObjective = next;
+    }
+  }
+  const ready = !!promptText();
+  if (ready !== lastInteractReady) {
+    setInteractReady(ready);
+    lastInteractReady = ready;
+  }
 }
 function loop(now) {
+  if (!lastTime) lastTime = now;
   const dt = Math.min((now - lastTime) / 1000, 1 / 30) || 0;
   lastTime = now;
   if (intro?.playing) updateIntro(dt);
@@ -176,18 +205,30 @@ async function init() {
       : [],
   });
   gate.onContinue(() => {
+    unlockAudio();
     if (level.audio?.music) startBackgroundMusic(level.audio.music);
   });
 
   if (objective) objective.textContent = "Loading…";
+  const audioReady = preloadAudio([
+    ...(level.audio?.sfx || []).map((clip) => clip.url),
+    ...(level.audio?.dialogue || []).map((clip) => clip.url),
+    ...(level.introShots || []).map((shot) => shot.dialogueUrl).filter(Boolean),
+  ]);
   await loadAllAssets((done, total) => {
     if (objective) objective.textContent = `Loading… ${done}/${total}`;
   });
+  warmImageAnchors();
+  await audioReady;
+
   ({ player, enemies, collectibles } = buildEntities());
   currentFloor = player.currentFloor || 1;
   camera = makeCamera(canvas);
   syncCanvasSize(canvas);
   window.addEventListener("resize", () => syncCanvasSize(canvas));
+  if (typeof ResizeObserver === "function") {
+    new ResizeObserver(() => syncCanvasSize(canvas)).observe(canvas);
+  }
   mountTouchControls();
   mountAudioHud();
 

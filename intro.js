@@ -1,9 +1,12 @@
 import { level, floorById } from "./levelData.js";
 import { takeAction, clearActions } from "./input.js";
+import { getAudioDuration, playDialogue, stopDialogue } from "./audio.js";
 import { lookAt, getFollowLook } from "./render.js";
 
 const SKIP_GUARD_S = 0.42;
-const SETTLE_S = 0.48;
+const SETTLE_S = 0.95;
+const HOLD_TAIL_S = 0.45;
+const CAPTION_FADE_S = 0.28;
 const STYLE_ID = "intro-cinematic-style";
 const FLOOR_LOOK_ABOVE = 100;
 
@@ -69,10 +72,28 @@ function resolveShot(shot, camera, player) {
   return shot;
 }
 
+function holdDuration(shot) {
+  if (shot?.follow) return shot.hold || 0.1;
+  if (shot?.dialogueUrl) {
+    const audio = getAudioDuration(shot.dialogueUrl);
+    if (audio > 0) return audio + HOLD_TAIL_S;
+    return Math.max(shot.hold || 0, 4);
+  }
+  const text = [shot?.caption?.title, shot?.caption?.line]
+    .filter(Boolean)
+    .join(" ");
+  const words = text.trim() ? text.trim().split(/\s+/).length : 0;
+  const read = words ? Math.min(3.6, 1.6 + words * 0.22) : 0;
+  return Math.max(shot.hold || 0, read);
+}
+
 function injectStyles() {
-  if (document.getElementById(STYLE_ID)) return;
-  const style = document.createElement("style");
-  style.id = STYLE_ID;
+  let style = document.getElementById(STYLE_ID);
+  if (!style) {
+    style = document.createElement("style");
+    style.id = STYLE_ID;
+    document.head.appendChild(style);
+  }
   style.textContent = `
     body.is-intro #hud,
     body.is-intro #controls,
@@ -85,13 +106,13 @@ function injectStyles() {
     #introOverlay {
       position: absolute;
       inset: 0;
-      z-index: 12;
+      z-index: 20;
       pointer-events: auto;
       cursor: pointer;
       user-select: none;
       touch-action: none;
       background:
-        radial-gradient(ellipse at center, transparent 46%, rgba(6, 4, 2, 0.55) 100%);
+        linear-gradient(to bottom, rgba(6, 4, 2, 0.42) 0%, transparent 18%, transparent 58%, rgba(6, 4, 2, 0.62) 100%);
     }
     #introOverlay.is-leaving {
       pointer-events: none;
@@ -101,12 +122,15 @@ function injectStyles() {
     #introCaption {
       position: absolute;
       left: 50%;
-      bottom: max(52px, calc(28px + var(--safe-bottom)));
+      bottom: max(28px, calc(18px + var(--safe-bottom)));
       transform: translateX(-50%);
-      width: min(92%, 520px);
+      width: min(92%, 560px);
       text-align: center;
       color: #f3dfad;
-      text-shadow: 0 2px 8px #000, 0 0 18px rgba(0, 0, 0, 0.8);
+      background: rgba(8, 7, 5, 0.82);
+      border: 2px solid rgba(185, 162, 115, 0.88);
+      box-shadow: 3px 3px 0 rgba(9, 8, 6, 0.55);
+      padding: 12px 16px 14px;
       opacity: 0;
       transition: opacity 0.28s ease;
       pointer-events: none;
@@ -121,8 +145,16 @@ function injectStyles() {
     }
     #introCaption .title {
       display: block;
-      font: 700 26px/1.15 Georgia, serif;
-      letter-spacing: 0.04em;
+      font: 700 24px/1.15 Georgia, serif;
+      letter-spacing: 0.03em;
+      text-shadow: 0 2px 8px #000;
+    }
+    #introCaption .line {
+      display: block;
+      margin-top: 8px;
+      font: 600 16px/1.4 Georgia, serif;
+      color: #fff6d8;
+      text-shadow: 0 2px 6px #000;
     }
     #introSkip {
       position: absolute;
@@ -138,11 +170,12 @@ function injectStyles() {
       pointer-events: none;
     }
     @media (max-width: 700px) {
+      #introCaption { padding: 10px 12px 12px; }
       #introCaption .title { font-size: 18px; }
       #introCaption .kicker { font-size: 9px; }
+      #introCaption .line { font-size: 14px; }
     }
   `;
-  document.head.appendChild(style);
 }
 
 function mountOverlay(root) {
@@ -152,6 +185,7 @@ function mountOverlay(root) {
     <div id="introCaption">
       <span class="kicker"></span>
       <span class="title"></span>
+      <span class="line"></span>
     </div>
     <div id="introSkip">Skip</div>
   `;
@@ -169,6 +203,8 @@ export function createIntro(
   const captionEl = overlay.querySelector("#introCaption");
   const kickerEl = captionEl.querySelector(".kicker");
   const titleEl = captionEl.querySelector(".title");
+  const lineEl = captionEl.querySelector(".line");
+  const playedDialogue = new Set();
 
   let playing = true;
   let shotIndex = 0;
@@ -187,6 +223,15 @@ export function createIntro(
     return resolveShot(shot, camera, player);
   }
 
+  function playShotDialogue(index) {
+    const shot = shots[index];
+    if (!shot?.dialogueUrl || playedDialogue.has(index)) return;
+    playedDialogue.add(index);
+    playDialogue(shot.dialogueUrl, {
+      volume: shot.dialogueVolume ?? 1,
+    });
+  }
+
   function applyLook(from, to, t, ease = easeInOutCubic) {
     const u = ease(Math.max(0, Math.min(1, t)));
     lookAt(
@@ -200,13 +245,18 @@ export function createIntro(
   function setCaption(caption, visible) {
     const kicker = caption?.kicker || "";
     const title = caption?.title || "";
-    const key = `${kicker}|${title}`;
+    const line = caption?.line || "";
+    const key = `${kicker}|${title}|${line}`;
     if (key !== shownCaption) {
       shownCaption = key;
       kickerEl.textContent = kicker;
       titleEl.textContent = title;
+      lineEl.textContent = line;
+      kickerEl.style.display = kicker ? "block" : "none";
+      titleEl.style.display = title ? "block" : "none";
+      lineEl.style.display = line ? "block" : "none";
     }
-    captionEl.style.opacity = visible && title ? "1" : "0";
+    captionEl.style.opacity = visible && (title || line) ? "1" : "0";
   }
 
   function currentLook() {
@@ -220,6 +270,7 @@ export function createIntro(
   function finish() {
     if (!playing) return;
     playing = false;
+    stopDialogue();
     const follow = getFollowLook(camera, player);
     lookAt(camera, follow.x, follow.y, follow.zoom);
     camera.scripted = false;
@@ -234,12 +285,14 @@ export function createIntro(
     settling = true;
     settleTime = 0;
     settleFrom = currentLook();
+    stopDialogue();
     setCaption(null, false);
   }
 
   const startPose = resolve(shots[0]);
   lookAt(camera, startPose.x, startPose.y, startPose.zoom);
   setCaption(startPose.caption, true);
+  playShotDialogue(0);
 
   overlay.addEventListener("pointerdown", (event) => {
     event.preventDefault();
@@ -279,18 +332,23 @@ export function createIntro(
         const duration = Math.max(shot.move, 0.001);
         const t = Math.min(1, phaseTime / duration);
         applyLook(resolve(shots[shotIndex - 1]), to, t, easeOf(shot));
-        setCaption(to.caption, t > 0.18 && !shot.follow);
+        setCaption(null, false);
         if (shot.follow) overlay.style.opacity = String(1 - t);
         if (t >= 1) {
           phase = "hold";
           phaseTime = 0;
+          playShotDialogue(shotIndex);
         }
         return playing;
       }
 
       lookAt(camera, to.x, to.y, to.zoom);
-      setCaption(to.caption, !(shot.hold > 0 && phaseTime > shot.hold - 0.18));
-      if (phaseTime >= shot.hold) {
+      const hold = holdDuration(shot);
+      setCaption(
+        to.caption,
+        !shot.follow && !(hold > 0 && phaseTime > hold - CAPTION_FADE_S),
+      );
+      if (phaseTime >= hold) {
         if (shotIndex >= shots.length - 1) {
           finish();
           return playing;
@@ -298,6 +356,8 @@ export function createIntro(
         shotIndex += 1;
         phase = shots[shotIndex].move > 0 ? "move" : "hold";
         phaseTime = 0;
+        if (phase === "hold") playShotDialogue(shotIndex);
+        else stopDialogue();
       }
       return playing;
     },

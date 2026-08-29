@@ -10,8 +10,13 @@ function load(key, url) {
     }
     const image = new Image();
     image.crossOrigin = "anonymous";
-    image.onload = () => {
-      images[key] = image;
+    image.decoding = "async";
+    image.onload = async () => {
+      try {
+        images[key] = await createImageBitmap(image);
+      } catch {
+        images[key] = image;
+      }
       resolve(true);
     };
     image.onerror = () => resolve(false);

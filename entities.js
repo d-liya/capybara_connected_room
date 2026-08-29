@@ -83,7 +83,7 @@ export class Player {
       this.attackElapsed = 0;
       this.setVisual("attack");
     }
-    if (this.visualState === "attack") return;
+
     this.vx = 0;
     if (!locked) {
       if (keys.left && !keys.right) {
@@ -97,8 +97,8 @@ export class Player {
     }
     this.x += this.vx * dt;
     clampToFloor(this);
-    if (this.visualState !== "attack")
-      this.setVisual(this.vx ? "walk" : "idle");
+    if (this.visualState === "attack") return;
+    this.setVisual(this.vx ? "walk" : "idle");
   }
 }
 

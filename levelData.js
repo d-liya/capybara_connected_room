@@ -10,8 +10,11 @@ export const level = {
     walkMax: 985,
     enterRightX: 850,
   },
+  camera: { followZoom: 1 },
   audio: {
     music: "",
+    sfx: [],
+    dialogue: [],
   },
   player: { width: 56, height: 96 },
   floors: [
@@ -82,7 +85,7 @@ export const level = {
     {
       floor: 2,
       x: 500,
-      zoom: 2.35,
+      zoom: 2.5,
       move: 0,
       hold: 0.45,
       ease: "outCubic",
@@ -91,14 +94,14 @@ export const level = {
     {
       floor: 1,
       x: 220,
-      zoom: 2.35,
+      zoom: 2.5,
       move: 1.2,
       hold: 0.4,
       ease: "inOutCubic",
     },
     {
       player: true,
-      zoom: 2.2,
+      zoom: 2.45,
       move: 1.05,
       hold: 0.35,
       ease: "inOutCubic",

@@ -129,16 +129,7 @@ body.is-playing #stage {
   opacity: 1;
 }
 #debugPanel {
-  position: absolute;
-  bottom: 8px;
-  left: 8px;
-  z-index: 6;
-  background: rgba(0, 0, 0, 0.5);
-  color: #fff;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-family: monospace;
-  pointer-events: auto;
+  display: none;
 }
 @keyframes controls {
   0%,
