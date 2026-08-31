@@ -401,7 +401,11 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
     image = images[`${asset.id}:${clip.state}:${index}`];
     const idleSheet = idleSheetClip(asset);
     if (idleSheet) {
-      heightPx = sh(camera, sheetHeightWorld(asset, idleSheet));
+      heightPx = sh(
+        camera,
+        sheetHeightWorld(asset, idleSheet) *
+          (clip.normalization?.scaleMultiplier ?? 1),
+      );
     } else {
       heightPx = sh(
         camera,
