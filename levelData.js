@@ -1,4 +1,7 @@
-export const level = {
+import { defineMapRegistry, getMapEntry, resolveActiveMap } from "./maps.js";
+
+const starterMap = {
+  id: "map-1",
   name: "connected-room-template",
   title: "Connected Rooms",
   objective: "Walk the house. Use doors to change floors.",
@@ -125,6 +128,11 @@ export const level = {
   ],
   assets: [],
 };
+
+/** Add immutable maps here. Each map uses the same ordinary level shape. */
+export const gameMaps = defineMapRegistry([starterMap], "map-1");
+export const { mapId: activeMapId, level } = resolveActiveMap(gameMaps);
+export const mapEntry = getMapEntry();
 
 export const assetById = new Map(
   level.assets.map((asset) => [asset.id, asset]),
