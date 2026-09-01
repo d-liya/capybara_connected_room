@@ -20,6 +20,21 @@ const IMAGE_URL_RE = /\.(png|jpe?g|gif|bmp|webp|svg)(\?|#|$)/i;
  * Explicit refresh (navigation type "reload") always shows the gate again.
  */
 const SESSION_GATE_KEY = "capybara.loadingGate.completed";
+const PARENT_START_PARAM = "capybaraStart";
+const PARENT_START_MESSAGE = "capybara-game-start";
+const PARENT_READY_MESSAGE = "capybara-game-start-ready";
+
+function usesParentStartGate() {
+  try {
+    return (
+      window.parent !== window &&
+      new URLSearchParams(window.location.search).get(PARENT_START_PARAM) ===
+        "parent"
+    );
+  } catch {
+    return false;
+  }
+}
 
 function hasCompletedLoadingGateThisSession() {
   try {
@@ -546,7 +561,10 @@ async function resolveGateDurationMs(dataFiles) {
 export const LOADING_GATE_CONTINUE_EVENT = "capybara:loading-gate-continue";
 
 export function createCoreLoadingGate(canvas, options = {}) {
-  const skipSplash = shouldSkipLoadingGate();
+  const parentStartGate = usesParentStartGate();
+  // A host-controlled embed must never inherit the standalone tab's completed
+  // session flag; the parent Play button owns each start explicitly.
+  const skipSplash = !parentStartGate && shouldSkipLoadingGate();
 
   if (isDevMode()) {
     if (skipSplash) {
@@ -601,6 +619,8 @@ export function createCoreLoadingGate(canvas, options = {}) {
 
   let isResolved = false;
   let hasEmittedContinue = false;
+  let continueReady = false;
+  let parentStartRequested = false;
   let resolvePromise = () => {};
   const completionPromise = new Promise((resolve) => {
     resolvePromise = resolve;
@@ -623,10 +643,35 @@ export function createCoreLoadingGate(canvas, options = {}) {
     resolvePromise();
   };
 
+  const continueGame = (detail) => {
+    if (!continueReady) {
+      if (detail.source === "parent") parentStartRequested = true;
+      return;
+    }
+    emitContinueIfNeeded({ userActivated: true, source: detail.source });
+    resolveIfNeeded();
+  };
+
+  const onParentMessage = (event) => {
+    if (!parentStartGate || event.source !== window.parent) return;
+    if (event.data?.type !== PARENT_START_MESSAGE) return;
+    continueGame({ source: "parent" });
+  };
+
+  if (parentStartGate) {
+    window.addEventListener("message", onParentMessage);
+    window.parent.postMessage({ type: PARENT_READY_MESSAGE }, "*");
+  }
+
   const enableContinue = () => {
+    continueReady = true;
+    if (parentStartGate) {
+      if (parentStartRequested) continueGame({ source: "parent" });
+      return;
+    }
+
     const onContinue = () => {
-      emitContinueIfNeeded({ userActivated: true });
-      resolveIfNeeded();
+      continueGame({ source: "template" });
     };
 
     logo.setAttribute("role", "button");
@@ -667,7 +712,7 @@ export function createCoreLoadingGate(canvas, options = {}) {
 
     await nextFrame();
     logo.classList.remove("is-swapping");
-    continueBtn.classList.add("is-visible");
+    if (!parentStartGate) continueBtn.classList.add("is-visible");
   };
 
   setTimeout(() => {
@@ -703,6 +748,7 @@ export function createCoreLoadingGate(canvas, options = {}) {
     },
     waitForCompletion: () => completionPromise,
     teardown: () => {
+      window.removeEventListener("message", onParentMessage);
       resolveIfNeeded();
       if (canvas) canvas.style.visibility = "visible";
       overlay.classList.add("is-leaving");
