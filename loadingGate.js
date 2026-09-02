@@ -371,6 +371,72 @@ function injectLoadingStyles() {
       transition: width ${MAX_GATE_MS}ms cubic-bezier(0.4, 0, 0.2, 1);
     }
 
+    .cpy-embedded-thumbnail {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      user-select: none;
+      -webkit-user-drag: none;
+    }
+
+    .cpy-embedded-scrim {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.08);
+      transition: background 180ms ease;
+    }
+
+    .cpy-embedded-play {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      width: clamp(58px, 8vw, 76px);
+      height: clamp(58px, 8vw, 76px);
+      transform: translate(-50%, -50%) scale(1);
+      display: grid;
+      place-items: center;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      border-radius: 999px;
+      background: #fff;
+      color: #080808;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.28);
+      cursor: pointer;
+      transition:
+        transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+        box-shadow 180ms ease,
+        background 180ms ease;
+    }
+
+    .cpy-embedded-play::before {
+      content: "";
+      width: 0;
+      height: 0;
+      margin-left: 5%;
+      border-top: 10px solid transparent;
+      border-bottom: 10px solid transparent;
+      border-left: 16px solid currentColor;
+    }
+
+    .cpy-embedded-play:hover,
+    .cpy-embedded-play:focus-visible {
+      transform: translate(-50%, -50%) scale(1.08);
+      box-shadow: 0 12px 42px rgba(0, 0, 0, 0.38);
+      outline: none;
+    }
+
+    .cpy-loading-overlay:has(.cpy-embedded-play:hover) .cpy-embedded-scrim,
+    .cpy-loading-overlay:has(.cpy-embedded-play:focus-visible) .cpy-embedded-scrim {
+      background: rgba(0, 0, 0, 0.02);
+    }
+
+    .cpy-embedded-play:active {
+      transform: translate(-50%, -50%) scale(0.98);
+    }
+
     @keyframes cpy-loading-fade-in {
       from { opacity: 0; }
       to { opacity: 1; }
@@ -573,9 +639,90 @@ async function resolveGateDurationMs(dataFiles) {
 
 export const LOADING_GATE_CONTINUE_EVENT = "capybara:loading-gate-continue";
 
+function createEmbeddedThumbnailGate(canvas, thumbnailUrl) {
+  injectLoadingStyles();
+  if (canvas) canvas.style.visibility = "hidden";
+  document.querySelectorAll(".cpy-loading-overlay").forEach((el) => el.remove());
+
+  const overlay = document.createElement("div");
+  overlay.className = "cpy-loading-overlay";
+
+  const thumbnail = document.createElement("img");
+  thumbnail.className = "cpy-embedded-thumbnail";
+  thumbnail.src = thumbnailUrl;
+  thumbnail.alt = "";
+  thumbnail.decoding = "async";
+  thumbnail.fetchPriority = "high";
+  thumbnail.draggable = false;
+
+  const scrim = document.createElement("div");
+  scrim.className = "cpy-embedded-scrim";
+
+  const playButton = document.createElement("button");
+  playButton.type = "button";
+  playButton.className = "cpy-embedded-play";
+  playButton.setAttribute("aria-label", "Play game");
+
+  overlay.append(thumbnail, scrim, playButton);
+  document.body.appendChild(overlay);
+
+  let resolved = false;
+  let emitted = false;
+  let resolveCompletion = () => {};
+  const listeners = new Set();
+  const completion = new Promise((resolve) => {
+    resolveCompletion = resolve;
+  });
+
+  const start = () => {
+    if (emitted) return;
+    emitted = true;
+    markLoadingGateCompletedThisSession();
+    const detail = { userActivated: true, source: "embedded-thumbnail" };
+    for (const listener of listeners) listener(detail);
+    window.dispatchEvent(
+      new CustomEvent(LOADING_GATE_CONTINUE_EVENT, { detail }),
+    );
+    if (window.parent !== window) {
+      window.parent.postMessage({ type: PARENT_STARTED_MESSAGE }, "*");
+    }
+    resolved = true;
+    resolveCompletion();
+  };
+
+  playButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    start();
+  });
+  playButton.addEventListener("click", start);
+
+  return {
+    onContinue: (listener) => {
+      listeners.add(listener);
+      return () => listeners.delete(listener);
+    },
+    waitForCompletion: () => completion,
+    teardown: () => {
+      if (!resolved) resolveCompletion();
+      if (canvas) canvas.style.visibility = "visible";
+      overlay.classList.add("is-leaving");
+      overlay.style.pointerEvents = "none";
+      requestAnimationFrame(() => {
+        overlay.style.opacity = "0";
+      });
+      setTimeout(() => overlay.remove(), OVERLAY_FADE_MS + 20);
+    },
+  };
+}
+
 export function createCoreLoadingGate(canvas, options = {}) {
   const parentStartGate = usesParentStartGate();
   const embeddedStartGate = usesEmbeddedStartGate();
+  const thumbnailUrl =
+    typeof options.thumbnailUrl === "string" ? options.thumbnailUrl.trim() : "";
+  if (embeddedStartGate && thumbnailUrl) {
+    return createEmbeddedThumbnailGate(canvas, thumbnailUrl);
+  }
   // Every embed needs a fresh user gesture: either its host starts it or the
   // game-owned Continue surface unlocks audio inside the frame.
   const skipSplash =

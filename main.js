@@ -299,6 +299,7 @@ function loop(now) {
 async function init() {
   window.game_title = level.title || level.name;
   const gate = createCoreLoadingGate(canvas, {
+    thumbnailUrl: level.thumbnailUrl,
     dataFiles: level.background?.url
       ? [{ url: level.background.url, name: level.name }]
       : [],
