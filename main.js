@@ -44,6 +44,7 @@ let player,
   lastTime = 0,
   paused = false,
   pauseOverlay = null,
+  pauseHud = null,
   time = 0,
   currentFloor = 1,
   toastTime = 0,
@@ -247,7 +248,7 @@ function ensurePauseOverlay() {
   pauseOverlay.id = "pauseOverlay";
   pauseOverlay.hidden = true;
   pauseOverlay.innerHTML =
-    "<strong>Paused</strong><span>Return to this page to keep playing</span>";
+    "<strong>Paused</strong><span>Press play to continue</span>";
   document.getElementById("stage")?.appendChild(pauseOverlay);
   return pauseOverlay;
 }
@@ -257,6 +258,7 @@ function setPaused(next) {
   if (paused === next) return;
   paused = next;
   document.body.classList.toggle("is-paused", paused);
+  pauseHud?.setPaused(paused);
   keys.left = keys.right = false;
   clearActions();
   setAudioOutputSuspended(paused);
@@ -335,7 +337,9 @@ async function init() {
   document.body.classList.add("is-playing");
   mountTouchControls();
   setPrimaryActionPresentation(level.controls?.primary);
-  mountAudioHud();
+  pauseHud = mountAudioHud(document.getElementById("stage"), {
+    onPausedChange: setPaused,
+  });
   bindPagePause();
   if (level.introShots?.length) intro = createIntro(camera, player);
   requestAnimationFrame(loop);

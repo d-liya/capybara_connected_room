@@ -7,6 +7,8 @@ import {
 
 const STYLE_ID = "capybara-audio-hud-style";
 const SPEAKER = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M11 5 6.5 9H3v6h3.5L11 19V5z" fill="currentColor"/><path d="M15.2 8.8a4.8 4.8 0 0 1 0 6.4M17.8 6.2a8.4 8.4 0 0 1 0 11.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>`;
+const PAUSE = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 5h4v14H7zM13 5h4v14h-4z" fill="currentColor"/></svg>`;
+const PLAY = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 5 11 7-11 7V5z" fill="currentColor"/></svg>`;
 
 function injectStyles() {
   if (document.getElementById(STYLE_ID)) return;
@@ -14,7 +16,7 @@ function injectStyles() {
   style.id = STYLE_ID;
   style.textContent = `
     body.has-audio-hud #objective {
-      margin-right: 46px;
+      margin-right: 88px;
     }
     body.is-intro #audioHud,
     body.is-intro #audioHud * {
@@ -32,11 +34,22 @@ function injectStyles() {
       gap: 8px;
       pointer-events: none;
     }
+    body.is-paused #audioHud {
+      z-index: 31;
+    }
+    #audioHudControls {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      pointer-events: none;
+    }
+    #gamePauseToggle,
     #audioHudToggle,
     #audioHudPanel {
       pointer-events: auto;
       touch-action: manipulation;
     }
+    #gamePauseToggle,
     #audioHudToggle {
       appearance: none;
       width: 36px;
@@ -54,7 +67,21 @@ function injectStyles() {
       backdrop-filter: blur(16px) saturate(1.2);
       -webkit-backdrop-filter: blur(16px) saturate(1.2);
       cursor: pointer;
+      transition: transform 160ms ease, background 160ms ease;
     }
+    #gamePauseToggle:hover,
+    #gamePauseToggle:focus-visible,
+    #audioHudToggle:hover,
+    #audioHudToggle:focus-visible {
+      transform: scale(1.07);
+      background: rgba(21, 13, 12, 0.76);
+    }
+    #gamePauseToggle:focus-visible,
+    #audioHudToggle:focus-visible {
+      outline: 2px solid rgba(255, 255, 255, 0.78);
+      outline-offset: 2px;
+    }
+    #gamePauseToggle svg,
     #audioHudToggle svg {
       width: 18px;
       height: 18px;
@@ -160,8 +187,9 @@ function injectStyles() {
     }
     @media (max-width: 700px) {
       body.has-audio-hud #objective {
-        margin-right: 40px;
+        margin-right: 78px;
       }
+      #gamePauseToggle,
       #audioHudToggle {
         width: 32px;
         height: 32px;
@@ -175,7 +203,10 @@ function allMuted(settings) {
   return AUDIO_CHANNELS.every((channel) => !settings[channel.id].on);
 }
 
-export function mountAudioHud(root = document.getElementById("stage")) {
+export function mountAudioHud(
+  root = document.getElementById("stage"),
+  { onPausedChange } = {},
+) {
   if (!root || document.getElementById("audioHud")) return;
   injectStyles();
   document.body.classList.add("has-audio-hud");
@@ -183,9 +214,14 @@ export function mountAudioHud(root = document.getElementById("stage")) {
   const wrap = document.createElement("div");
   wrap.id = "audioHud";
   wrap.innerHTML = `
-    <button type="button" id="audioHudToggle" aria-label="Audio settings" aria-expanded="false" aria-controls="audioHudPanel" title="Audio (M)">
-      ${SPEAKER}
-    </button>
+    <div id="audioHudControls">
+      <button type="button" id="gamePauseToggle" aria-label="Pause game" aria-pressed="false" title="Pause (P)">
+        ${PAUSE}
+      </button>
+      <button type="button" id="audioHudToggle" aria-label="Audio settings" aria-expanded="false" aria-controls="audioHudPanel" title="Audio (M)">
+        ${SPEAKER}
+      </button>
+    </div>
     <div id="audioHudPanel" hidden role="dialog" aria-label="Audio settings">
       <strong class="audioHudTitle">Audio</strong>
       ${AUDIO_CHANNELS.map(
@@ -202,9 +238,20 @@ export function mountAudioHud(root = document.getElementById("stage")) {
   `;
   root.appendChild(wrap);
 
+  const pauseButton = wrap.querySelector("#gamePauseToggle");
   const button = wrap.querySelector("#audioHudToggle");
   const panel = wrap.querySelector("#audioHudPanel");
   let open = false;
+  let paused = false;
+
+  function setPausedState(next) {
+    paused = !!next;
+    if (paused) setOpen(false);
+    pauseButton.innerHTML = paused ? PLAY : PAUSE;
+    pauseButton.setAttribute("aria-label", paused ? "Resume game" : "Pause game");
+    pauseButton.setAttribute("aria-pressed", paused ? "true" : "false");
+    pauseButton.title = paused ? "Resume (P)" : "Pause (P)";
+  }
 
   function setOpen(next) {
     open = next;
@@ -231,6 +278,12 @@ export function mountAudioHud(root = document.getElementById("stage")) {
     event.preventDefault();
     event.stopPropagation();
     setOpen(!open);
+  });
+
+  pauseButton.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    onPausedChange?.(!paused);
   });
 
   panel.addEventListener("pointerdown", (event) => event.stopPropagation());
@@ -291,6 +344,11 @@ export function mountAudioHud(root = document.getElementById("stage")) {
 
   window.addEventListener("keydown", (event) => {
     if (document.body.classList.contains("is-intro")) return;
+    if (event.code === "KeyP" && !event.repeat) {
+      event.preventDefault();
+      onPausedChange?.(!paused);
+      return;
+    }
     if (event.code === "KeyM" && !event.repeat) {
       event.preventDefault();
       setOpen(!open);
@@ -304,4 +362,5 @@ export function mountAudioHud(root = document.getElementById("stage")) {
 
   sync();
   onAudioSettingsChange(sync);
+  return { setPaused: setPausedState };
 }
