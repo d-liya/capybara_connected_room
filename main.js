@@ -247,8 +247,19 @@ function ensurePauseOverlay() {
   pauseOverlay = document.createElement("div");
   pauseOverlay.id = "pauseOverlay";
   pauseOverlay.hidden = true;
-  pauseOverlay.innerHTML =
-    "<strong>Paused</strong><span>Press play to continue</span>";
+  pauseOverlay.innerHTML = `
+    <div class="pauseDialog" role="dialog" aria-labelledby="pauseDialogTitle" aria-describedby="pauseDialogHint">
+      <strong id="pauseDialogTitle">Paused</strong>
+      <span id="pauseDialogHint">Take a breather. Your progress is right here.</span>
+      <button type="button" id="pauseResumeButton">Resume game</button>
+    </div>`;
+  pauseOverlay
+    .querySelector("#pauseResumeButton")
+    ?.addEventListener("pointerdown", (event) => {
+      event.preventDefault();
+      event.stopPropagation();
+      setPaused(false);
+    });
   document.getElementById("stage")?.appendChild(pauseOverlay);
   return pauseOverlay;
 }
