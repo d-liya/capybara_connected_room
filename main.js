@@ -1,4 +1,4 @@
-import { level, floorById } from "./levelData.js";
+import { level, floorById, gameThumbnailUrl } from "./levelData.js";
 import { loadAllAssets } from "./assets.js";
 import { buildEntities } from "./entities.js";
 import { takeAction, clearActions, keys } from "./input.js";
@@ -312,7 +312,7 @@ function loop(now) {
 async function init() {
   window.game_title = level.title || level.name;
   const gate = createCoreLoadingGate(canvas, {
-    thumbnailUrl: level.thumbnailUrl,
+    thumbnailUrl: gameThumbnailUrl,
     dataFiles: level.background?.url
       ? [{ url: level.background.url, name: level.name }]
       : [],
