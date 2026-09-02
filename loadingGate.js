@@ -37,6 +37,18 @@ function usesParentStartGate() {
   }
 }
 
+function usesEmbeddedStartGate() {
+  try {
+    return (
+      window.parent !== window &&
+      new URLSearchParams(window.location.search).get(PARENT_START_PARAM) ===
+        "embedded"
+    );
+  } catch {
+    return false;
+  }
+}
+
 function hasCompletedLoadingGateThisSession() {
   try {
     return sessionStorage.getItem(SESSION_GATE_KEY) === "1";
@@ -563,9 +575,11 @@ export const LOADING_GATE_CONTINUE_EVENT = "capybara:loading-gate-continue";
 
 export function createCoreLoadingGate(canvas, options = {}) {
   const parentStartGate = usesParentStartGate();
-  // A host-controlled embed must never inherit the standalone tab's completed
-  // session flag; the parent Play button owns each start explicitly.
-  const skipSplash = !parentStartGate && shouldSkipLoadingGate();
+  const embeddedStartGate = usesEmbeddedStartGate();
+  // Every embed needs a fresh user gesture: either its host starts it or the
+  // game-owned Continue surface unlocks audio inside the frame.
+  const skipSplash =
+    !parentStartGate && !embeddedStartGate && shouldSkipLoadingGate();
 
   if (isDevMode()) {
     if (skipSplash) {
