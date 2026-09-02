@@ -24,6 +24,7 @@ const PARENT_START_PARAM = "capybaraStart";
 const PARENT_START_MESSAGE = "capybara-game-start";
 const PARENT_READY_MESSAGE = "capybara-game-start-ready";
 const PARENT_STARTED_MESSAGE = "capybara-game-started";
+const EMBEDDED_THUMBNAIL_URL = "";
 
 function usesParentStartGate() {
   try {
@@ -718,8 +719,9 @@ function createEmbeddedThumbnailGate(canvas, thumbnailUrl) {
 export function createCoreLoadingGate(canvas, options = {}) {
   const parentStartGate = usesParentStartGate();
   const embeddedStartGate = usesEmbeddedStartGate();
-  const thumbnailUrl =
+  const suppliedThumbnailUrl =
     typeof options.thumbnailUrl === "string" ? options.thumbnailUrl.trim() : "";
+  const thumbnailUrl = suppliedThumbnailUrl || EMBEDDED_THUMBNAIL_URL;
   if (embeddedStartGate && thumbnailUrl) {
     return createEmbeddedThumbnailGate(canvas, thumbnailUrl);
   }

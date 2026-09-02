@@ -140,5 +140,3 @@ export const assetById = new Map(
 export const floorById = new Map(
   level.floors.map((floor) => [floor.floor, floor]),
 );
-
-export const gameThumbnailUrl = "";
