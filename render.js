@@ -399,19 +399,10 @@ function drawArt(ctx, camera, entity, state, time = 0, options = {}) {
   } else if (clip?.type === "frames") {
     const index = frameIndex(clip, time);
     image = images[`${asset.id}:${clip.state}:${index}`];
-    const idleSheet = idleSheetClip(asset);
-    if (idleSheet) {
-      heightPx = sh(
-        camera,
-        sheetHeightWorld(asset, idleSheet) *
-          (clip.normalization?.scaleMultiplier ?? 1),
-      );
-    } else {
-      heightPx = sh(
-        camera,
-        asset.renderSize.height * clip.normalization.scaleMultiplier,
-      );
-    }
+    heightPx = sh(
+      camera,
+      asset.renderSize.height * (clip.normalization?.scaleMultiplier ?? 1),
+    );
     const frameSize = image ? imgSize(image) : null;
     widthPx = frameSize
       ? (heightPx * frameSize.width) / frameSize.height
