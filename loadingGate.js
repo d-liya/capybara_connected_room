@@ -23,6 +23,7 @@ const SESSION_GATE_KEY = "capybara.loadingGate.completed";
 const PARENT_START_PARAM = "capybaraStart";
 const PARENT_START_MESSAGE = "capybara-game-start";
 const PARENT_READY_MESSAGE = "capybara-game-start-ready";
+const PARENT_STARTED_MESSAGE = "capybara-game-started";
 
 function usesParentStartGate() {
   try {
@@ -635,6 +636,9 @@ export function createCoreLoadingGate(canvas, options = {}) {
     window.dispatchEvent(
       new CustomEvent(LOADING_GATE_CONTINUE_EVENT, { detail }),
     );
+    if (detail.userActivated && window.parent !== window) {
+      window.parent.postMessage({ type: PARENT_STARTED_MESSAGE }, "*");
+    }
   };
 
   const resolveIfNeeded = () => {
