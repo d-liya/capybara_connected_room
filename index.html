@@ -1,4 +1,10 @@
 <!doctype html>
+<!--
+  Hosting integration note: this document supplies the hosted game ID,
+  analytics bootstrap, early local automation seed, and game-client entry
+  point. It is editable; if it is changed, keep an intentional deployed
+  analytics path and a bootable client.
+-->
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -44,6 +50,7 @@
         <label><input type="checkbox" id="dbgToggle" /> Show bbox debug (`)</label>
       </div>
     </main>
+    <script src="automationBootstrap.js"></script>
     <script type="module" src="main.js?v=immutable-thumbnail-export-v1"></script>
   </body>
 </html>

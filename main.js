@@ -1,3 +1,9 @@
+/**
+ * Game-client integration note: this composes the loader, game loop, HUD,
+ * audio, and optional local E2B simulation registration. It is editable
+ * source. If you reorganize it, keep the hosted game bootable and leave an
+ * equivalent deterministic test path for simulation.js when automation is on.
+ */
 import { level, floorById } from "./levelData.js";
 import { loadAllAssets } from "./assets.js";
 import { buildEntities } from "./entities.js";
@@ -28,6 +34,7 @@ import { createIntro } from "./intro.js";
 import { createCompletion } from "./completion.js";
 import { mountAudioHud } from "./audioHud.js";
 import { createMechanics } from "./mechanics.js";
+import { automationEnabled, installAutomation } from "./automation.js";
 
 const canvas = document.getElementById("game"),
   ctx = canvas.getContext("2d", { alpha: false });
@@ -290,6 +297,50 @@ function bindPagePause() {
   });
 }
 
+function automationSnapshot() {
+  const entity = (item) => item && ({
+    id: item.id,
+    canonicalId: item.canonicalId,
+    floor: item.floor ?? item.currentFloor,
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+    vx: item.vx,
+    facing: item.facing,
+    hp: item.hp,
+    maxHp: item.maxHp,
+    dead: Boolean(item.dead),
+    hidden: Boolean(item.hidden),
+    invulnerable: item.invulnerable,
+    state: item.visualState,
+    phase: item.phase,
+    phaseTime: item.phaseTime,
+    actionTime: item.actionTime,
+    primaryElapsed: item.primaryElapsed,
+    primaryPulse: Boolean(item.primaryPulse),
+    detected: Boolean(item.detected),
+    awareness: item.awareness,
+    targetId: item.targetId,
+  });
+  return {
+    phase: completion ? "completed" : intro?.playing ? "intro" : "playing",
+    time,
+    floor: currentFloor,
+    player: entity(player),
+    actors: actors.map(entity),
+    collectibles: collectibles.map((item) => ({
+      ...entity(item),
+      collected: Boolean(item.collected),
+    })),
+    mechanics: Object.fromEntries(mechanics.state),
+    prompt: intro?.playing || completion ? "" : promptText(),
+    objective: objectiveText(),
+    completed: Boolean(completion),
+    paused,
+  };
+}
+
 function loop(now) {
   if (paused) {
     lastTime = now;
@@ -352,6 +403,8 @@ async function init() {
   });
   bindPagePause();
   if (level.introShots?.length) intro = createIntro(camera, player);
+  if (automationEnabled()) intro = null;
+  installAutomation({ snapshot: automationSnapshot });
   requestAnimationFrame(loop);
 }
 init().catch((error) => {

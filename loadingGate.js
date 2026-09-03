@@ -1,3 +1,9 @@
+/**
+ * Hosting integration note: this is the hosted game's loading and Continue
+ * experience. It is ordinary editable source; if you change it, keep a
+ * reachable completion path, the user-gesture Continue hook, and
+ * waitForCompletion() (or update the game client to an equivalent contract).
+ */
 /** Fallback gate length when there are no map assets to probe. */
 const DEFAULT_GATE_MS = 2600;
 /** Floor so a warm cache / fast CDN still gets a readable brand wipe. */

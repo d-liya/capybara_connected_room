@@ -1,3 +1,9 @@
+/**
+ * Hosting integration note: this starts best-effort deployed-game playtime
+ * analytics using window.gameId. It is editable source; if you replace it,
+ * leave the hosted build with an intentional game identifier and analytics
+ * path, or update its callers to an equivalent integration.
+ */
 (function bootAnalytics() {
   const SDK_SRC = "https://assets.capybara.build/js/game-api-client.js";
 
