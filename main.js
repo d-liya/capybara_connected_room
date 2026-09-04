@@ -34,7 +34,7 @@ import { createIntro } from "./intro.js";
 import { createCompletion } from "./completion.js";
 import { mountAudioHud } from "./audioHud.js";
 import { createMechanics } from "./mechanics.js";
-import { automationEnabled, installAutomation } from "./automation.js";
+import { installAutomation } from "./automation.js";
 
 const canvas = document.getElementById("game"),
   ctx = canvas.getContext("2d", { alpha: false });
@@ -325,6 +325,18 @@ function automationSnapshot() {
   });
   return {
     phase: completion ? "completed" : intro?.playing ? "intro" : "playing",
+    introExpected: Boolean(level.introShots?.length),
+    introOverlayPresent: Boolean(document.getElementById("introOverlay")),
+    camera: camera
+      ? {
+          x: camera.x,
+          y: camera.y,
+          viewW: camera.viewW,
+          viewH: camera.viewH,
+          zoom: camera.zoom,
+          scripted: Boolean(camera.scripted),
+        }
+      : null,
     time,
     floor: currentFloor,
     player: entity(player),
@@ -403,7 +415,6 @@ async function init() {
   });
   bindPagePause();
   if (level.introShots?.length) intro = createIntro(camera, player);
-  if (automationEnabled()) intro = null;
   installAutomation({ snapshot: automationSnapshot });
   requestAnimationFrame(loop);
 }

@@ -278,10 +278,9 @@ export function createIntro(
     const follow = getFollowLook(camera, player);
     lookAt(camera, follow.x, follow.y, follow.zoom);
     camera.scripted = false;
-    overlay.classList.add("is-leaving");
+    overlay.remove();
     document.body.classList.remove("is-intro");
     clearActions();
-    window.setTimeout(() => overlay.remove(), 480);
   }
 
   function requestSkip(force = false) {

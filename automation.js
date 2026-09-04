@@ -14,6 +14,7 @@ const enabled = localHost && params.get("automation") === "1";
 const realtime = enabled && params.get("realtime") === "1";
 const fixedStepMs = 1000 / 60;
 const maxTraceEntries = 12_000;
+const frameTraceInterval = 30;
 
 let adapter = null;
 let nextFrameId = 1;
@@ -94,7 +95,9 @@ async function step(frameCount = 1) {
       throw new Error("The game did not schedule its next animation frame.");
     }
     for (const callback of callbacks) callback(now);
-    record("frame", { state: snapshot() });
+    if (Math.round(now / fixedStepMs) % frameTraceInterval === 0) {
+      record("frame", { state: snapshot() });
+    }
     if (realtime || frame % 60 === 59) {
       await new Promise((resolve) => setTimeout(resolve, realtime ? fixedStepMs : 0));
     }

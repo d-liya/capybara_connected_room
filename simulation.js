@@ -8,7 +8,19 @@ export async function runSimulation(test) {
   await test.ready;
   test.releaseAll();
   await test.step(1);
-  const state = test.snapshot();
+  let state = test.snapshot();
+  if (state.phase === "intro") {
+    state = await test.until(
+      (next) => next.phase !== "intro",
+      { maxFrames: 1800, label: "intro completes and releases gameplay" },
+    );
+  }
+  if (state.introOverlayPresent) {
+    throw new Error("Intro overlay remained mounted after the intro phase.");
+  }
+  if (state.camera?.scripted) {
+    throw new Error("Camera remained scripted after the intro phase.");
+  }
   return {
     ok: true,
     name: "starter-smoke-test",
